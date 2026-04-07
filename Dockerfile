@@ -3,7 +3,8 @@
 
 FROM node:20-alpine AS angular
 WORKDIR /src/powerbi.client
-COPY powerbi.client/package.json powerbi.client/package-lock.json ./
+# Inclui angular.json no mesmo passo do lockfile para qualquer alteração de budget invalidar o cache com segurança.
+COPY powerbi.client/package.json powerbi.client/package-lock.json powerbi.client/angular.json ./
 RUN npm ci
 COPY powerbi.client/ ./
 RUN npx ng build --configuration production
