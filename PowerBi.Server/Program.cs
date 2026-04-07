@@ -78,6 +78,13 @@ if (app.Environment.IsProduction())
         throw new InvalidOperationException(
             "Em produção defina ConnectionStrings__DefaultConnection (PostgreSQL). Ex.: variável ConnectionStrings__DefaultConnection no Render.");
     }
+
+    /* Render / Docker: aplica migrations pendentes antes de servir requisições */
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.MigrateAsync();
+    }
 }
 
 app.UseDefaultFiles();
