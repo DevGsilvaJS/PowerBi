@@ -1,0 +1,53 @@
+<div class="login-page">
+  <div class="login-bg" aria-hidden="true"></div>
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M4 19V5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M8 15V9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M12 15V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M16 15V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">Power BI</span>
+        <span class="brand-sub">Painéis e relatórios</span>
+      </div>
+    </div>
+
+    <h1 class="login-heading">Entrar</h1>
+    <p class="login-lead">Use o usuário e senha cadastrados em <strong>Gestão de clientes</strong>.</p>
+
+    <p *ngIf="erro" class="login-erro" role="alert">{{ erro }}</p>
+
+    <form class="login-form" (ngSubmit)="logar()">
+      <label class="field">
+        <span class="field-label">Usuário</span>
+        <input
+          type="text"
+          name="usuario"
+          [(ngModel)]="usuario"
+          autocomplete="username"
+          placeholder="seu.usuario"
+          class="field-input"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Senha</span>
+        <input
+          type="password"
+          name="senha"
+          [(ngModel)]="senha"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          class="field-input"
+        />
+      </label>
+
+      <button type="submit" class="btn-primary" [disabled]="carregando">{{ carregando ? 'Entrando…' : 'Entrar' }}</button>
+    </form>
+  </div>
+</div>

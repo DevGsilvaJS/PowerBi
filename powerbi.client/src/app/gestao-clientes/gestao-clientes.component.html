@@ -1,0 +1,129 @@
+<div class="gc-page" [class.gc-page--admin]="desbloqueado">
+  <div class="gc-bg" aria-hidden="true"></div>
+
+  <div class="gc-panel" *ngIf="!desbloqueado">
+    <h1 class="gc-title">Acesso restrito</h1>
+    <p class="gc-lead">Informe a senha para continuar.</p>
+    <form class="gc-form" (ngSubmit)="tentarSenha()">
+      <label class="gc-field">
+        <span class="gc-label">Senha</span>
+        <input
+          type="password"
+          name="senhaAcesso"
+          [(ngModel)]="senhaDigitada"
+          class="gc-input"
+          autocomplete="current-password"
+          [class.gc-input--erro]="senhaErro"
+        />
+      </label>
+      <p *ngIf="senhaErro" class="gc-erro" role="alert">{{ senhaErro }}</p>
+      <button type="submit" class="gc-btn">Entrar</button>
+    </form>
+  </div>
+
+  <div class="gc-panel gc-panel--full" *ngIf="desbloqueado">
+    <header class="gc-config-head">
+      <h1 class="gc-title">Gestão de clientes</h1>
+      <button type="button" class="gc-btn-ghost" (click)="encerrarSessao()">Sair</button>
+    </header>
+    <p class="gc-lead">
+      Cadastros gravados no servidor. Use <strong>Novo cadastro</strong> para incluir ou <strong>Editar</strong> / <strong>Excluir</strong> na tabela.
+    </p>
+
+    <p *ngIf="apiErro" class="gc-erro gc-banner" role="alert">{{ apiErro }}</p>
+    <p *ngIf="salvoMsg && modoForm === 'none'" class="gc-ok gc-banner">{{ salvoMsg }}</p>
+
+    <div class="gc-toolbar">
+      <button type="button" class="gc-btn gc-btn--secondary" (click)="novo()" [disabled]="carregandoLista">
+        Novo cadastro
+      </button>
+      <button type="button" class="gc-btn-ghost" (click)="carregarLista()" [disabled]="carregandoLista">
+        Atualizar lista
+      </button>
+    </div>
+
+    <div class="gc-table-wrap" *ngIf="!carregandoLista; else loadingTpl">
+      <table class="gc-table" *ngIf="lista.length; else emptyTpl">
+        <thead>
+          <tr>
+            <th>Id</th>
+            <th>Usuário</th>
+            <th>ChaveWs</th>
+            <th>Identificador</th>
+            <th>Lojas</th>
+            <th>Criado em</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of lista">
+            <td>{{ row.id }}</td>
+            <td>{{ row.usuario }}</td>
+            <td class="gc-cell-ellipsis" [title]="row.chaveWs">{{ row.chaveWs }}</td>
+            <td>{{ row.identificador }}</td>
+            <td class="gc-cell-ellipsis" [title]="row.lojas">{{ row.lojas }}</td>
+            <td>{{ row.criadoEm | date : 'dd/MM/yyyy HH:mm' }}</td>
+            <td class="gc-actions">
+              <button type="button" class="gc-link" (click)="editar(row)">Editar</button>
+              <button type="button" class="gc-link gc-link--danger" (click)="excluir(row)">Excluir</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ng-template #loadingTpl>
+      <p class="gc-muted">Carregando…</p>
+    </ng-template>
+    <ng-template #emptyTpl>
+      <p class="gc-muted" *ngIf="!carregandoLista">Nenhum cadastro ainda. Clique em <strong>Novo cadastro</strong>.</p>
+    </ng-template>
+
+    <div class="gc-form-card" *ngIf="modoForm !== 'none'">
+      <h2 class="gc-form-title">{{ modoForm === 'create' ? 'Novo cadastro' : 'Editar #' + editandoId }}</h2>
+      <form class="gc-config-form" (ngSubmit)="salvar()">
+        <label class="gc-field">
+          <span class="gc-label">Usuário</span>
+          <input type="text" name="usuario" [(ngModel)]="form.usuario" class="gc-input" autocomplete="username" />
+        </label>
+        <label class="gc-field">
+          <span class="gc-label">Senha</span>
+          <input
+            type="password"
+            name="senhaCfg"
+            [(ngModel)]="form.senha"
+            class="gc-input"
+            autocomplete="new-password"
+            [placeholder]="modoForm === 'edit' ? 'Deixe em branco para manter a senha atual' : ''"
+          />
+        </label>
+        <label class="gc-field">
+          <span class="gc-label">ChaveWs</span>
+          <input type="text" name="chaveWs" [(ngModel)]="form.chaveWs" class="gc-input" autocomplete="off" />
+        </label>
+        <label class="gc-field">
+          <span class="gc-label">Identificador</span>
+          <input type="text" name="identificador" [(ngModel)]="form.identificador" class="gc-input" autocomplete="off" />
+        </label>
+        <label class="gc-field gc-field--full">
+          <span class="gc-label">Lojas (IDs separados por vírgula)</span>
+          <input
+            type="text"
+            name="lojas"
+            [(ngModel)]="form.lojas"
+            class="gc-input"
+            placeholder="1,2,3,4,5"
+            autocomplete="off"
+          />
+          <span class="gc-hint">Ex.: várias lojas para parâmetros da API.</span>
+        </label>
+
+        <p *ngIf="salvoErro" class="gc-erro" role="alert">{{ salvoErro }}</p>
+
+        <div class="gc-form-actions">
+          <button type="submit" class="gc-btn" [disabled]="salvando">{{ salvando ? 'Salvando…' : 'Salvar' }}</button>
+          <button type="button" class="gc-btn-ghost" (click)="cancelarForm()" [disabled]="salvando">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

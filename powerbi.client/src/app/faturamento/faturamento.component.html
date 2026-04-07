@@ -1,0 +1,217 @@
+<div class="faturamento">
+  <div class="filtros-wrap">
+  <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+    <div class="filtros-row">
+      <label class="filtro-field filtro-field--loja">
+        <span class="filtro-label">Lojas</span>
+        <app-lojas-multi-dropdown
+          [lojas]="lojas"
+          [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+          [inputErro]="!!periodoErro"
+        />
+      </label>
+      <label class="filtro-field">
+        <span class="filtro-label">Data inicial</span>
+        <input
+          type="date"
+          name="dataInicial"
+          [(ngModel)]="dataInicial"
+          class="filtro-input"
+          [class.filtro-input--erro]="periodoErro"
+        />
+      </label>
+      <label class="filtro-field">
+        <span class="filtro-label">Data final</span>
+        <input
+          type="date"
+          name="dataFinal"
+          [(ngModel)]="dataFinal"
+          class="filtro-input"
+          [class.filtro-input--erro]="periodoErro"
+        />
+      </label>
+      <div class="filtros-acoes">
+        <button type="submit" class="btn-pesquisar">Pesquisar</button>
+      </div>
+    </div>
+    <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+  </form>
+  </div>
+
+  <div class="faturamento-panels">
+    <section class="kpi-panel" aria-labelledby="faturamento-panel-title">
+      <h2 id="faturamento-panel-title" class="kpi-panel__title">Faturamento</h2>
+      <div
+        class="kpi-panel__grid kpi-grid"
+        [style.--kpi-card-count]="kpiCards.length"
+      >
+        <article *ngFor="let k of kpiCards" class="kpi-card">
+          <header class="kpi-header" [class.kpi-header--solo]="k.toggle === 'none'">
+            <h3 class="kpi-title">{{ k.title }}</h3>
+            <div
+              *ngIf="k.toggle === 'valorPercentual'"
+              class="view-toggle view-toggle--duo"
+              role="group"
+              [attr.aria-label]="'Visualização: ' + k.title"
+            >
+              <button
+                type="button"
+                class="toggle-btn"
+                [class.active]="getMode(k.id) === 'valor'"
+                [attr.aria-pressed]="getMode(k.id) === 'valor'"
+                (click)="setMode(k.id, 'valor')"
+              >
+                Valor
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                [class.active]="getMode(k.id) === 'percentual'"
+                [attr.aria-pressed]="getMode(k.id) === 'percentual'"
+                (click)="setMode(k.id, 'percentual')"
+              >
+                Percentual
+              </button>
+            </div>
+          </header>
+
+          <div class="kpi-body" *ngIf="k.toggle === 'none'">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatValor(k.id) }}</span>
+            </div>
+          </div>
+
+          <div class="kpi-body" *ngIf="k.toggle !== 'none'">
+            <ng-container [ngSwitch]="getModeForCard(k)">
+              <div *ngSwitchCase="'valor'" class="kpi-valor">
+                <span class="kpi-number">{{ formatValor(k.id) }}</span>
+              </div>
+
+              <div *ngSwitchCase="'percentual'" class="kpi-percent">
+                <span class="kpi-label">{{ kpiLabelPercentual(k.id) }}</span>
+                <span class="kpi-number">{{ formatPercentual(k.id) }}</span>
+              </div>
+            </ng-container>
+          </div>
+        </article>
+      </div>
+
+      <div
+        class="kpi-panel__grid kpi-grid kpi-grid--familia-produto"
+        [style.--kpi-card-count]="4"
+      >
+        <article *ngFor="let c of cardsFamiliaProduto" class="kpi-card kpi-card--familia-produto">
+          <header class="kpi-header kpi-header--solo">
+            <h3 class="kpi-title">{{ c.titulo }}</h3>
+          </header>
+          <div class="kpi-body">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatValorFamiliaProduto(c) }}</span>
+            </div>
+            <div class="kpi-familia-qtd">
+              <span class="kpi-familia-qtd__label">Quantidade</span>
+              <span class="kpi-familia-qtd__num">{{ formatQtdFamiliaProduto(c) }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="kpi-panel kpi-panel--pagamento" aria-labelledby="vendas-categoria-panel-title">
+      <h2 id="vendas-categoria-panel-title" class="kpi-panel__title">Vendas por categoria</h2>
+      <p *ngIf="produtosCarregando" class="formas-vazio">Carregando…</p>
+      <ng-container *ngIf="!produtosCarregando">
+        <div class="vendas-produto-head" aria-hidden="true">
+          <span class="vendas-produto-head__cat">Descrição</span>
+          <span class="vendas-produto-head__val">Valor</span>
+          <span class="vendas-produto-head__qtd">Vendas</span>
+        </div>
+        <ul class="formas-list vendas-produto-list">
+          <li *ngFor="let v of vendasPorProdutoLinhas" class="forma-row forma-row--vendas-produto">
+            <span class="forma-label">{{ v.label }}</span>
+            <span class="forma-valor">{{ formatValorVendaProdutoLinha(v) }}</span>
+            <span class="forma-qtd-vendas">{{ formatQtdVendasProdutoLinha(v) }}</span>
+          </li>
+        </ul>
+      </ng-container>
+    </section>
+
+    <section class="kpi-panel kpi-panel--pagamento" aria-labelledby="pagamento-panel-title">
+      <h2 id="pagamento-panel-title" class="kpi-panel__title">Formas de pagamento</h2>
+      <ul class="formas-list" *ngIf="formasPagamentoLinhas.length > 0">
+        <li *ngFor="let f of formasPagamentoLinhas" class="forma-row">
+          <span class="forma-label">{{ f.meioPagamento }}</span>
+          <span class="forma-valor">{{ formatValorFormaLinha(f) }}</span>
+        </li>
+      </ul>
+      <p *ngIf="!produtosCarregando && formasPagamentoLinhas.length === 0" class="formas-vazio">
+        Nenhuma forma de pagamento retornada para o período e loja selecionados.
+      </p>
+      <div class="forma-total">
+        <span class="forma-total__label">Total a receber (visão geral)</span>
+        <span class="forma-total__valor">{{ formatTotalPagamentoResumo() }}</span>
+      </div>
+    </section>
+
+    <section class="kpi-panel kpi-panel--material" aria-labelledby="material-panel-title">
+      <h2 id="material-panel-title" class="kpi-panel__title">Vendas por Material</h2>
+      <div *ngIf="vendasPorMaterialLinhas.length > 0" class="material-table-wrap">
+        <div class="material-head" aria-hidden="true">
+          <span class="material-head__material">Material</span>
+          <span class="material-head__stat">Qtd.</span>
+          <span class="material-head__stat material-head__stat--right">Bruto</span>
+          <span class="material-head__stat material-head__stat--right">Líq.</span>
+          <span class="material-head__stat material-head__stat--right">%</span>
+        </div>
+        <ul class="material-list">
+          <li *ngFor="let m of vendasPorMaterialLinhas" class="material-row">
+            <span class="material-label">{{ m.material }}</span>
+            <span class="material-stat material-stat--qtd">{{ formatQuantidadeMaterial(m.exQuantidade) }}</span>
+            <span class="material-stat material-stat--bruto">{{ formatMoeda(m.exBruto) }}</span>
+            <span class="material-stat material-stat--liq">{{ formatMoeda(m.exLiquido) }}</span>
+            <span class="material-stat material-stat--pct">{{ formatPercentualMaterial(m.exPercentual) }}</span>
+          </li>
+        </ul>
+      </div>
+      <p *ngIf="produtosCarregando" class="material-vazio">Carregando…</p>
+      <p *ngIf="!produtosCarregando && vendasPorMaterialLinhas.length === 0" class="material-vazio">
+        Nenhum material no período e loja selecionados.
+      </p>
+    </section>
+
+    <section class="kpi-panel kpi-panel--grife" aria-labelledby="grife-panel-title">
+      <h2 id="grife-panel-title" class="kpi-panel__title">Vendas por Grife</h2>
+      <div *ngIf="!produtosCarregando && vendasPorGrifeSubgrupos.length > 0" class="grife-tres-cards">
+        <article *ngFor="let sg of vendasPorGrifeSubgrupos" class="grife-card" [attr.aria-label]="sg.titulo">
+          <h3 class="grife-card__title">{{ sg.titulo }}</h3>
+          <div *ngIf="sg.linhas.length > 0" class="material-table-wrap grife-card__table">
+            <div class="material-head" aria-hidden="true">
+              <span class="material-head__material">Grife</span>
+              <span class="material-head__stat">Qtd.</span>
+              <span class="material-head__stat material-head__stat--right">Bruto</span>
+              <span class="material-head__stat material-head__stat--right">Líq.</span>
+              <span class="material-head__stat material-head__stat--right">%</span>
+            </div>
+            <ul class="material-list">
+              <li *ngFor="let g of sg.linhas" class="material-row">
+                <span class="material-label">{{ g.grife }}</span>
+                <span class="material-stat material-stat--qtd">{{ formatQuantidadeMaterial(g.exQuantidade) }}</span>
+                <span class="material-stat material-stat--bruto">{{ formatMoeda(g.exBruto) }}</span>
+                <span class="material-stat material-stat--liq">{{ formatMoeda(g.exLiquido) }}</span>
+                <span class="material-stat material-stat--pct">{{ formatPercentualMaterial(g.exPercentual) }}</span>
+              </li>
+            </ul>
+          </div>
+          <p *ngIf="sg.linhas.length === 0" class="grife-card__vazio">Nenhuma venda nesta categoria.</p>
+        </article>
+      </div>
+      <p *ngIf="produtosCarregando" class="material-vazio">Carregando…</p>
+      <p *ngIf="!produtosCarregando && vendasPorGrifeSubgrupos.length === 0" class="material-vazio">
+        Nenhum dado de grife no período e loja selecionados.
+      </p>
+      <p *ngIf="!produtosCarregando && vendasPorGrifeSubgrupos.length > 0 && !temVendasGrifeQualquer()" class="material-vazio">
+        Nenhum produto com família 01/02/03 ou primeiro dígito 1/2/3 no período.
+      </p>
+    </section>
+  </div>
+</div>

@@ -1,0 +1,17 @@
+# Blueprint Render — defina ConnectionStrings__DefaultConnection e Jwt__Key no painel após o deploy.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: powerbi-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:8080
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false

@@ -1,0 +1,222 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.estoque {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.page-title {
+  margin: 0 0 1.25rem;
+  font-size: var(--app-font-page-title);
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.03em;
+}
+
+.estoque-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.35rem 1.5rem 1.5rem;
+  border-radius: 0.85rem;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+.estoque-card__title {
+  margin: 0 0 0.5rem;
+  font-size: var(--app-font-panel-title);
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.estoque-card__hint {
+  margin: 0 0 1rem;
+  font-size: var(--app-font-muted);
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.filtros-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  margin-bottom: 1.25rem;
+}
+
+.filtros {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 1rem 1.15rem;
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.filtros-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.filtro-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1 1 130px;
+  max-width: 168px;
+}
+
+.filtro-field--loja {
+  flex: 1 1 180px;
+  max-width: 280px;
+}
+
+.filtro-field--data {
+  flex: 0 1 132px;
+  max-width: 148px;
+}
+
+.filtro-label {
+  font-size: var(--app-font-body);
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.filtro-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  font-size: var(--app-font-subtitle);
+  font-family: inherit;
+  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filtro-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.filtro-select {
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.filtro-select option {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+.filtro-input--erro {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.filtros-acoes {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.btn-pesquisar {
+  padding: 0.6rem 1.35rem;
+  font-size: var(--app-font-subtitle);
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+}
+
+.btn-pesquisar:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn-pesquisar:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.filtros-erro {
+  margin: 0.85rem 0 0;
+  font-size: var(--app-font-muted);
+  color: #fca5a5;
+}
+
+.filtros-erro--api {
+  color: #fcd34d;
+}
+
+.tabela-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.grid-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--app-font-label);
+  color: #e2e8f0;
+}
+
+.grid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  font-weight: 700;
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.98);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  white-space: nowrap;
+}
+
+.grid-table tbody td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  vertical-align: top;
+  max-width: 14rem;
+  word-wrap: break-word;
+}
+
+.grid-table tbody tr:hover td {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.estoque-vazio {
+  margin: 0;
+  font-size: var(--app-font-subtitle);
+  color: #64748b;
+}

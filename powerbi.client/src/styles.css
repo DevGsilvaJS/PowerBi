@@ -1,0 +1,38 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/**
+ * Escala tipográfica única (referência: tabelas “Vendas por Grife”).
+ */
+:root {
+  --app-font-caption: 0.625rem;
+  --app-font-data: 0.6875rem;
+  --app-font-label: 0.75rem;
+  --app-font-body: 0.8125rem;
+  --app-font-muted: 0.875rem;
+  --app-font-subtitle: 0.9375rem;
+  --app-font-strong: 1rem;
+  --app-font-heading-sm: 1.05rem;
+  --app-font-heading: 1.125rem;
+  --app-font-panel-title: 1.05rem;
+  --app-font-page-title: 1.35rem;
+  --app-font-kpi-number: 1.05rem;
+  --app-font-total-destaque: 1.125rem;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: var(--app-font-body);
+  line-height: 1.45;
+  background: #0f172a;
+  color: #e2e8f0;
+}

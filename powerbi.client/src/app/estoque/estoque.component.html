@@ -1,0 +1,78 @@
+<div class="estoque">
+  <h2 class="page-title">Estoque</h2>
+
+  <section class="estoque-card" aria-labelledby="estoque-card-title">
+    <h3 id="estoque-card-title" class="estoque-card__title">Entradas de estoque</h3>
+    <p class="estoque-card__hint">
+      O grid chama a SavWin só com <strong>loja</strong> (CODIGOLOJA), INICIOSEQ e FINALSEQ. As datas abaixo são
+      <strong>referência para a tela</strong> (dd/mm/aaaa) e <strong>não</strong> vão no body dessa API.
+    </p>
+
+    <div class="filtros-wrap">
+      <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+        <div class="filtros-row">
+            <label class="filtro-field filtro-field--loja">
+              <span class="filtro-label">Lojas</span>
+              <app-lojas-multi-dropdown
+                [lojas]="lojas"
+                [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+                [inputErro]="!!periodoErro"
+              />
+            </label>
+          <label class="filtro-field filtro-field--data">
+            <span class="filtro-label">Data inicial (referência)</span>
+            <input
+              type="text"
+              name="dataInicial"
+              [(ngModel)]="dataInicial"
+              class="filtro-input"
+              [class.filtro-input--erro]="periodoErro"
+              placeholder="dd/mm/aaaa"
+              maxlength="10"
+              autocomplete="off"
+            />
+          </label>
+          <label class="filtro-field filtro-field--data">
+            <span class="filtro-label">Data final (referência)</span>
+            <input
+              type="text"
+              name="dataFinal"
+              [(ngModel)]="dataFinal"
+              class="filtro-input"
+              [class.filtro-input--erro]="periodoErro"
+              placeholder="dd/mm/aaaa"
+              maxlength="10"
+              autocomplete="off"
+            />
+          </label>
+          <div class="filtros-acoes">
+            <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+              {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+            </button>
+          </div>
+        </div>
+        <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+        <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+      </form>
+    </div>
+
+    <div class="tabela-wrap" *ngIf="linhas.length > 0">
+      <table class="grid-table">
+        <thead>
+          <tr>
+            <th *ngFor="let c of colunasGrid" [attr.title]="c.dica">{{ c.titulo }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of linhas">
+            <td *ngFor="let c of colunasGrid">{{ valorCelula(row, c.key) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p *ngIf="!carregando && linhas.length === 0 && !apiErro" class="estoque-vazio">
+      Nenhum registro carregado. Ajuste filtros e clique em <strong>Pesquisar</strong>.
+    </p>
+  </section>
+</div>

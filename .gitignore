@@ -1,0 +1,48 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+*.exe
+*.log
+.vs/
+.vscode/
+
+## Angular
+ui-taskapp/node_modules/
+ui-taskapp/dist/
+ui-taskapp/.angular/
+ui-taskapp/coverage/
+
+## Database
+*.db
+*.sqlite
+
+## Environment
+appsettings.Development.json
+appsettings.Production.json
+.env
+.env.local
+
+## Docker
+.dockerignore
+
+## IDE
+.idea/
+*.swp
+*.swo
+*~
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Planilha (dados locais / produção; descomente para não subir no git)
+# Planilha/
+
+## Build
+*.zip
+*.tar.gz

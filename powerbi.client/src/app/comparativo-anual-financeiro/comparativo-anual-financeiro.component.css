@@ -1,0 +1,12 @@
+/* Extras do Financeiro; gráfico e painéis vêm de comparativo-anual-vendas.component.css */
+
+.chart-panel__meta {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: var(--app-font-subtitle);
+}
+
+/* Mesmo ritmo vertical do espaço abaixo dos filtros (1.25rem) entre dois gráficos */
+.chart-panel + .chart-panel {
+  margin-top: 1.25rem;
+}

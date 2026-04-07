@@ -1,0 +1,176 @@
+<div class="financeiro">
+  <div class="filtros-wrap">
+    <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+      <div class="filtros-row">
+        <label class="filtro-field filtro-field--loja">
+          <span class="filtro-label">Lojas</span>
+          <app-lojas-multi-dropdown
+            [lojas]="lojas"
+            [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+            [inputErro]="!!periodoErro"
+          />
+        </label>
+        <label class="filtro-field filtro-field--data">
+          <span class="filtro-label">Emissão (de)</span>
+          <input
+            type="text"
+            name="duplicataEmissao1"
+            [(ngModel)]="duplicataEmissao1"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            placeholder="dd/mm/aaaa"
+            maxlength="10"
+            autocomplete="off"
+          />
+        </label>
+        <label class="filtro-field filtro-field--data">
+          <span class="filtro-label">Emissão (até)</span>
+          <input
+            type="text"
+            name="duplicataEmissao2"
+            [(ngModel)]="duplicataEmissao2"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            placeholder="dd/mm/aaaa"
+            maxlength="10"
+            autocomplete="off"
+          />
+        </label>
+        <div class="filtros-acoes">
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+          </button>
+        </div>
+      </div>
+      <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+      <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+    </form>
+  </div>
+
+  <div class="financeiro-panels">
+    <section class="kpi-panel" aria-labelledby="fin-resumo-title">
+      <h2 id="fin-resumo-title" class="kpi-panel__title">Financeiro</h2>
+      <div class="kpi-panel__grid kpi-grid kpi-grid--financeiro-resumo" [style.--kpi-card-count]="4">
+        <article class="kpi-card">
+          <header class="kpi-header kpi-header--solo">
+            <h3 class="kpi-title">Contas a pagar</h3>
+          </header>
+          <div class="kpi-body">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatMoeda(totalValorAberto) }}</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-header kpi-header--solo">
+            <h3 class="kpi-title">Contas pagas</h3>
+          </header>
+          <div class="kpi-body">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatMoeda(totalValorBaixado) }}</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-header kpi-header--solo">
+            <h3 class="kpi-title">Contas a receber</h3>
+          </header>
+          <div class="kpi-body">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatMoeda(totalReceberAberto) }}</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-header kpi-header--solo">
+            <h3 class="kpi-title">Contas recebidas</h3>
+          </header>
+          <div class="kpi-body">
+            <div class="kpi-valor">
+              <span class="kpi-number">{{ formatMoeda(totalReceberBaixado) }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="kpi-panel kpi-panel--despesas-plano" aria-labelledby="fin-plano-title">
+      <h2 id="fin-plano-title" class="kpi-panel__title">Despesas p/ Plano de contas</h2>
+
+      <ng-container *ngIf="!carregando; else carregandoPlano">
+        <div class="despesas-plano-dupla">
+          <div class="despesas-plano-subcard">
+            <h3 class="despesas-plano-subtitle">Contas a pagar</h3>
+            <p *ngIf="despesasPorPlanoAberto.length === 0 && !apiErro" class="despesas-plano-vazio">
+              Nenhum dado para o filtro.
+            </p>
+            <ul class="despesas-plano-lista" *ngIf="despesasPorPlanoAberto.length > 0">
+              <li *ngFor="let item of despesasPorPlanoAberto" class="despesas-plano-linha">
+                <span class="despesas-plano-nome" [attr.title]="item.plano">{{ item.plano }}</span>
+                <span class="despesas-plano-valor">{{ formatMoeda(item.valor) }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="despesas-plano-subcard">
+            <h3 class="despesas-plano-subtitle">Contas pagas</h3>
+            <p *ngIf="despesasPorPlanoBaixado.length === 0 && !apiErro" class="despesas-plano-vazio">
+              Nenhum dado para o filtro.
+            </p>
+            <ul class="despesas-plano-lista" *ngIf="despesasPorPlanoBaixado.length > 0">
+              <li *ngFor="let item of despesasPorPlanoBaixado" class="despesas-plano-linha">
+                <span class="despesas-plano-nome" [attr.title]="item.plano">{{ item.plano }}</span>
+                <span class="despesas-plano-valor">{{ formatMoeda(item.valor) }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #carregandoPlano>
+        <p class="despesas-plano-carregando">Carregando…</p>
+      </ng-template>
+    </section>
+
+    <section class="kpi-panel kpi-panel--receber-forma" aria-labelledby="fin-forma-pgto-title">
+      <h2 id="fin-forma-pgto-title" class="kpi-panel__title">Contas a receber / recebidas — forma de pagamento</h2>
+
+      <ng-container *ngIf="!carregando; else carregandoFormaPgto">
+        <div class="receber-forma-dupla">
+          <div class="despesas-plano-subcard">
+            <h3 class="despesas-plano-subtitle">A receber</h3>
+            <p *ngIf="receberPorFormaAberto.length === 0 && !apiErro" class="despesas-plano-vazio">
+              Nenhum dado para o filtro.
+            </p>
+            <ul class="despesas-plano-lista" *ngIf="receberPorFormaAberto.length > 0">
+              <li *ngFor="let item of receberPorFormaAberto" class="receber-forma-linha">
+                <span class="receber-forma-nome" [attr.title]="item.forma">{{ item.forma }}</span>
+                <span class="receber-forma-valor">{{ formatMoeda(item.valor) }}</span>
+                <span class="receber-forma-pct">{{ formatPercentual(item.percentual) }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="despesas-plano-subcard">
+            <h3 class="despesas-plano-subtitle">Recebidas</h3>
+            <p *ngIf="receberPorFormaBaixado.length === 0 && !apiErro" class="despesas-plano-vazio">
+              Nenhum dado para o filtro.
+            </p>
+            <ul class="despesas-plano-lista" *ngIf="receberPorFormaBaixado.length > 0">
+              <li *ngFor="let item of receberPorFormaBaixado" class="receber-forma-linha">
+                <span class="receber-forma-nome" [attr.title]="item.forma">{{ item.forma }}</span>
+                <span class="receber-forma-valor">{{ formatMoeda(item.valor) }}</span>
+                <span class="receber-forma-pct">{{ formatPercentual(item.percentual) }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #carregandoFormaPgto>
+        <p class="despesas-plano-carregando">Carregando…</p>
+      </ng-template>
+    </section>
+  </div>
+</div>

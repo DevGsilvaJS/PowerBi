@@ -1,0 +1,34 @@
+<div class="lojas-dd" #root>
+  <button
+    type="button"
+    class="lojas-dd__trigger"
+    [class.lojas-dd__trigger--erro]="inputErro"
+    [disabled]="lojas.length === 0"
+    (click)="togglePainel($event)"
+    [attr.aria-expanded]="aberto"
+    aria-haspopup="listbox"
+  >
+    <span class="lojas-dd__value">{{ textoResumo }}</span>
+    <span class="lojas-dd__caret" aria-hidden="true"></span>
+  </button>
+
+  <div *ngIf="aberto" class="lojas-dd__panel" role="listbox" (click)="$event.stopPropagation()">
+    <div class="lojas-dd__toolbar">
+      <button type="button" class="lojas-dd__link" (click)="selecionarTodas()">Todas</button>
+      <button type="button" class="lojas-dd__link" (click)="limparSelecao()">Limpar</button>
+    </div>
+    <ul class="lojas-dd__lista">
+      <li *ngFor="let l of lojas" class="lojas-dd__item">
+        <label class="lojas-dd__label">
+          <input
+            type="checkbox"
+            class="lojas-dd__check"
+            [checked]="estaSelecionada(l.id)"
+            (change)="alternar(l.id, $event)"
+          />
+          <span>{{ l.nome }}</span>
+        </label>
+      </li>
+    </ul>
+  </div>
+</div>

@@ -1,0 +1,52 @@
+.resumo-geral {
+  max-width: 960px;
+}
+
+.page-title {
+  margin: 0 0 0.5rem;
+  font-size: var(--app-font-page-title);
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.03em;
+}
+
+.page-desc {
+  margin: 0 0 2rem;
+  font-size: var(--app-font-strong);
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  padding: 1.25rem 1.5rem;
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.card-accent {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(30, 41, 59, 0.6));
+}
+
+.card-label {
+  display: block;
+  font-size: var(--app-font-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.card-value {
+  font-size: var(--app-font-heading);
+  font-weight: 600;
+  color: #e2e8f0;
+}

@@ -1,0 +1,142 @@
+.lojas-dd {
+  position: relative;
+  width: 100%;
+}
+
+.lojas-dd__trigger {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  font-size: var(--app-font-subtitle);
+  font-family: inherit;
+  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lojas-dd__trigger:hover:not(:disabled) {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.lojas-dd__trigger:focus-visible {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.lojas-dd__trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lojas-dd__trigger--erro {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.lojas-dd__trigger--erro:focus-visible {
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
+}
+
+.lojas-dd__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lojas-dd__caret {
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #94a3b8;
+  margin-top: 2px;
+}
+
+.lojas-dd__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 100;
+  max-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.lojas-dd__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0.35rem 0.65rem 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.lojas-dd__link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--app-font-label);
+  font-weight: 600;
+  font-family: inherit;
+  color: #a5b4fc;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lojas-dd__link:hover {
+  color: #c7d2fe;
+}
+
+.lojas-dd__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.lojas-dd__item {
+  margin: 0;
+}
+
+.lojas-dd__label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.75rem;
+  font-size: var(--app-font-muted);
+  font-weight: 500;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.lojas-dd__label:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.lojas-dd__check {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #6366f1;
+  cursor: pointer;
+  flex-shrink: 0;
+}

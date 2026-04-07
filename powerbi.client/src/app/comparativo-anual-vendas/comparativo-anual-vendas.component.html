@@ -1,0 +1,193 @@
+<div class="comparativo-anual">
+  <h2 class="page-title">Comparativo anual (Vendas)</h2>
+
+  <div class="filtros-wrap">
+    <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+      <div class="filtros-row">
+        <label class="filtro-field filtro-field--loja">
+          <span class="filtro-label">Lojas</span>
+          <app-lojas-multi-dropdown
+            [lojas]="lojas"
+            [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+            [inputErro]="!!periodoErro"
+          />
+        </label>
+        <label class="filtro-field filtro-field--ano">
+          <span class="filtro-label">Primeiro ano</span>
+          <input
+            type="number"
+            name="ano1"
+            [(ngModel)]="ano1"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            min="1990"
+            max="2100"
+            step="1"
+            inputmode="numeric"
+            placeholder="2024"
+            title="Ex.: 2024 (a ordem em relação ao segundo ano não importa)"
+          />
+        </label>
+        <label class="filtro-field filtro-field--ano">
+          <span class="filtro-label">Segundo ano</span>
+          <input
+            type="number"
+            name="ano2"
+            [(ngModel)]="ano2"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            min="1990"
+            max="2100"
+            step="1"
+            inputmode="numeric"
+            placeholder="2025"
+            title="Ex.: 2025"
+          />
+        </label>
+        <div class="filtros-acoes">
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+          </button>
+        </div>
+      </div>
+      <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+      <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+    </form>
+  </div>
+
+  <section class="chart-panel" aria-labelledby="chart-title">
+    <h3 id="chart-title" class="chart-panel__title">
+      Vendas por mês
+      <span *ngIf="jaPesquisou && anoRef" class="chart-panel__subtitle">
+        ({{ anoAnterior }} × {{ anoRef }})
+      </span>
+    </h3>
+
+    <p *ngIf="!jaPesquisou" class="chart-placeholder">
+      Defina loja e os dois anos e clique em <strong>Pesquisar</strong> para carregar o gráfico (API produtos
+      por O.S.).
+    </p>
+
+    <div *ngIf="jaPesquisou && !carregando && !apiErro" class="chart-body">
+      <div class="chart-legend" role="list">
+        <span class="chart-legend__item chart-legend__item--ant" role="listitem">
+          <span class="swatch" aria-hidden="true"></span>
+          {{ anoAnterior }}
+        </span>
+        <span class="chart-legend__item chart-legend__item--atual" role="listitem">
+          <span class="swatch" aria-hidden="true"></span>
+          {{ anoRef }}
+        </span>
+        <span class="chart-legend__hint" role="note">
+          Δ% = {{ anoRef }} vs {{ anoAnterior }} (mesmo mês)
+          <span class="chart-legend__cores" aria-hidden="true">
+            <span class="legenda-verde">↑ verde</span>
+            <span class="legenda-vermelho">↓ vermelho</span>
+          </span>
+        </span>
+      </div>
+
+      <svg
+        class="chart-svg"
+        [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH"
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+      >
+        <line
+          [attr.x1]="padL"
+          [attr.y1]="chartH - padB"
+          [attr.x2]="chartW - padR"
+          [attr.y2]="chartH - padB"
+          class="chart-axis"
+        />
+
+        <g *ngFor="let y of tickYs(); let ti = index">
+          <line
+            [attr.x1]="padL"
+            [attr.y1]="y"
+            [attr.x2]="chartW - padR"
+            [attr.y2]="y"
+            class="chart-grid"
+          />
+          <text [attr.x]="padL - 8" [attr.y]="y + 4" text-anchor="end" class="chart-tick-label">
+            {{ formatMoedaCurta(tickValor(ti)) }}
+          </text>
+        </g>
+
+        <g *ngFor="let p of serieMensal; let i = index">
+          <text
+            [attr.x]="slotX(i) + innerW / 24"
+            [attr.y]="chartH - padB + 16"
+            text-anchor="middle"
+            class="chart-mes-label"
+          >
+            {{ p.label }}
+          </text>
+          <text
+            [attr.x]="slotX(i) + innerW / 24"
+            [attr.y]="chartH - padB + 32"
+            text-anchor="middle"
+            [attr.class]="classeVariacaoSvg(p)"
+          >
+            {{ textoVariacao(p) }}
+            <title>{{ tituloVariacao(p) }}</title>
+          </text>
+
+          <ng-container *ngIf="barPairOffset(i) as o">
+            <rect
+              [attr.x]="o.a"
+              [attr.y]="barY(p.anoAnterior)"
+              [attr.width]="o.barW"
+              [attr.height]="barHeight(p.anoAnterior)"
+              class="chart-bar chart-bar--ant"
+              rx="3"
+            >
+              <title>
+                {{ p.label }} {{ anoAnterior }}: {{ formatMoeda(p.anoAnterior) }}
+              </title>
+            </rect>
+            <rect
+              [attr.x]="o.b"
+              [attr.y]="barY(p.anoAtual)"
+              [attr.width]="o.barW"
+              [attr.height]="barHeight(p.anoAtual)"
+              class="chart-bar chart-bar--atual"
+              rx="3"
+            >
+              <title>
+                {{ p.label }} {{ anoRef }}: {{ formatMoeda(p.anoAtual) }} · {{ tituloVariacao(p) }}
+              </title>
+            </rect>
+          </ng-container>
+        </g>
+      </svg>
+
+      <div class="chart-detalhe-wrap" role="region" aria-label="Valores e vendas por mês">
+        <table class="chart-detalhe-table">
+          <thead>
+            <tr>
+              <th scope="col">Mês</th>
+              <th scope="col" class="chart-detalhe-table__num">{{ anoAnterior }} — valor</th>
+              <th scope="col" class="chart-detalhe-table__num">{{ anoAnterior }} — vendas</th>
+              <th scope="col" class="chart-detalhe-table__num">{{ anoRef }} — valor</th>
+              <th scope="col" class="chart-detalhe-table__num">{{ anoRef }} — vendas</th>
+              <th scope="col" class="chart-detalhe-table__num">Var. %</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of serieMensal">
+              <th scope="row">{{ p.label }}</th>
+              <td class="chart-detalhe-table__num">{{ formatMoeda(p.anoAnterior) }}</td>
+              <td class="chart-detalhe-table__num">{{ formatInteiro(p.qtdVendasAnterior) }}</td>
+              <td class="chart-detalhe-table__num">{{ formatMoeda(p.anoAtual) }}</td>
+              <td class="chart-detalhe-table__num">{{ formatInteiro(p.qtdVendasAtual) }}</td>
+              <td class="chart-detalhe-table__num" [ngClass]="classeVariacaoLinha(p)">
+                {{ textoVariacao(p) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
