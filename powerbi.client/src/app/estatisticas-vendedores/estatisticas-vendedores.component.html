@@ -1,0 +1,430 @@
+<div class="est-vend-page">
+  <div class="est-vend__head">
+    <div class="est-vend__head-row">
+      <h2 class="page-title">Estatísticas vendedores</h2>
+      <button
+        type="button"
+        class="est-vend__btn-metricas"
+        (click)="abrirModalMetricas()"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="modalMetricasAberto"
+      >
+        Definições das métricas
+      </button>
+    </div>
+  </div>
+
+  <div class="filtros-wrap">
+    <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+      <div class="filtros-row">
+        <label class="filtro-field filtro-field--loja">
+          <span class="filtro-label">Lojas</span>
+          <app-lojas-multi-dropdown
+            [lojas]="lojas"
+            [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+            [inputErro]="!!periodoErro"
+          />
+        </label>
+        <label class="filtro-field">
+          <span class="filtro-label">Data inicial</span>
+          <input
+            type="date"
+            name="dataInicial"
+            [(ngModel)]="dataInicial"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+          />
+        </label>
+        <label class="filtro-field">
+          <span class="filtro-label">Data final</span>
+          <input
+            type="date"
+            name="dataFinal"
+            [(ngModel)]="dataFinal"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+          />
+        </label>
+        <div class="filtros-acoes">
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+          </button>
+        </div>
+      </div>
+      <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+      <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+    </form>
+  </div>
+
+  <div *ngIf="carregando" class="est-vend__loading est-vend__loading--global" role="status">
+    Carregando <strong>produtos por O.S.</strong>…
+  </div>
+
+  <p
+    *ngIf="jaPesquisou && !carregando && !apiErro && linhasRanking.length === 0"
+    class="est-vend__empty est-vend__empty--global"
+    role="status"
+  >
+    A API não retornou linhas de <strong>produtos por O.S.</strong> para este período e lojas. Ajuste datas ou lojas, ou
+    confira se o mesmo período retorna dados em <strong>Faturamento</strong>.
+  </p>
+
+  <div *ngIf="!carregando && linhasRanking.length > 0" class="est-vend__data">
+    <ng-container *ngIf="linhaRotativaAtual() as vendCard">
+      <section
+        class="est-vend__kpi-rot"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-label="Indicadores do vendedor em destaque"
+      >
+        <div class="est-vend__kpi-rot-head">
+          <h3 class="est-vend__kpi-rot-title">{{ vendCard.vendedor }}</h3>
+        </div>
+        <div class="est-vend__kpi-grid" role="list">
+          <article *ngFor="let k of metricCards" class="est-vend__kpi-card" role="listitem">
+            <h4 class="est-vend__kpi-card-label">{{ k.label }}</h4>
+            <p class="est-vend__kpi-card-value">{{ formatKpiExibido(k.metric) }}</p>
+          </article>
+        </div>
+      </section>
+    </ng-container>
+
+    <div class="est-vend__grid-charts">
+      <section
+        *ngFor="let c of barCharts"
+        class="est-vend__chart-panel est-vend__chart-panel--bar"
+        [attr.aria-labelledby]="'est-bar-' + c.id"
+      >
+        <h3 class="est-vend__chart-title" [id]="'est-bar-' + c.id">{{ c.title }}</h3>
+        <div class="est-vend__chart-scroll est-vend__chart-scroll--bar">
+          <svg
+            class="est-vend__chart-svg"
+            [attr.viewBox]="'0 0 ' + chartW + ' ' + chartHBar()"
+            preserveAspectRatio="xMinYMin meet"
+            role="img"
+          >
+            <line
+              [attr.x1]="chartLabelW"
+              [attr.y1]="chartHBar() - 18"
+              [attr.x2]="chartLabelW + barPlotW()"
+              [attr.y2]="chartHBar() - 18"
+              class="est-vend__chart-axis"
+            />
+            <ng-container *ngFor="let frac of tickFracs">
+              <line
+                [attr.x1]="tickX(frac)"
+                [attr.y1]="chartPadT"
+                [attr.x2]="tickX(frac)"
+                [attr.y2]="chartHBar() - 20"
+                class="est-vend__chart-grid"
+              />
+              <text
+                [attr.x]="tickX(frac)"
+                [attr.y]="chartHBar() - 4"
+                text-anchor="middle"
+                class="est-vend__chart-tick"
+              >
+                {{ tickValorBar(frac, c.metric) }}
+              </text>
+            </ng-container>
+            <g *ngFor="let r of linhasRanking; let i = index">
+              <title>{{ r.vendedor }} — {{ formatBarEndLabel(r, c.metric) }}</title>
+              <text
+                [attr.x]="chartLabelW - 6"
+                [attr.y]="rowTop(i) + 19"
+                text-anchor="end"
+                class="est-vend__chart-label"
+              >
+                {{ truncarNome(r.vendedor, 20) }}
+              </text>
+              <rect
+                [attr.x]="chartLabelW"
+                [attr.y]="rowTop(i) + 3"
+                [attr.width]="barWidth(r, c.metric)"
+                [attr.height]="chartRowH - 6"
+                rx="2"
+                class="est-vend__chart-bar"
+              />
+              <text
+                [attr.x]="valorLabelX()"
+                [attr.y]="rowTop(i) + 19"
+                text-anchor="end"
+                class="est-vend__chart-val est-vend__chart-val--solo"
+              >
+                {{ formatBarEndLabel(r, c.metric) }}
+              </text>
+            </g>
+          </svg>
+        </div>
+      </section>
+    </div>
+
+    <section *ngIf="mesesOrdenados.length > 0" class="est-vend__evolucao" aria-labelledby="est-evo-title">
+      <h3 id="est-evo-title" class="est-vend__sec-title">Evolução no tempo (por mês)</h3>
+      <p class="est-vend__evolucao-meta">
+        Com base em <strong>data da venda</strong> nas linhas da O.S. Linhas: top
+        {{ vendedoresEvolucao.length }} vendedores por líquido no período.
+      </p>
+
+      <div class="est-vend__legend">
+        <span *ngFor="let v of vendedoresEvolucao; let li = index" class="est-vend__legend-item">
+          <span class="est-vend__legend-swatch" [style.background]="corLinhaVi(li)"></span>
+          {{ truncarNome(v, 28) }}
+        </span>
+      </div>
+
+      <div class="est-vend__evo-grid">
+        <div class="est-vend__chart-panel est-vend__chart-panel--evo">
+          <h4 class="est-vend__subchart-title">Líquido por mês (R$)</h4>
+          <svg
+            class="est-vend__evo-svg"
+            [attr.viewBox]="'0 0 ' + evoChartW + ' ' + evoChartH"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <line
+              [attr.x1]="evoPadL"
+              [attr.y1]="evoPadT + evoInnerH()"
+              [attr.x2]="evoChartW - evoPadR"
+              [attr.y2]="evoPadT + evoInnerH()"
+              class="est-vend__chart-axis"
+            />
+            <text [attr.x]="evoPadL - 4" [attr.y]="evoPadT + 4" class="est-vend__evo-axis-label" text-anchor="end">
+              {{ formatMoedaCurta(maxEvolLiquido) }}
+            </text>
+            <text [attr.x]="evoPadL - 4" [attr.y]="evoPadT + evoInnerH()" class="est-vend__evo-axis-label" text-anchor="end">
+              0
+            </text>
+            <ng-container *ngFor="let mes of mesesOrdenados; let mi = index">
+              <text
+                [attr.x]="evoX(mi)"
+                [attr.y]="evoChartH - 8"
+                text-anchor="middle"
+                class="est-vend__chart-tick"
+              >
+                {{ mesLegendaPub(mes) }}
+              </text>
+            </ng-container>
+            <g *ngFor="let v of vendedoresEvolucao; let vi = index">
+              <polyline
+                fill="none"
+                [attr.stroke]="corLinhaVi(vi)"
+                stroke-width="2"
+                [attr.points]="polylineLiquido(v)"
+              />
+            </g>
+          </svg>
+        </div>
+
+        <div class="est-vend__chart-panel est-vend__chart-panel--evo">
+          <h4 class="est-vend__subchart-title">% desconto médio ponderado por mês</h4>
+          <svg
+            class="est-vend__evo-svg"
+            [attr.viewBox]="'0 0 ' + evoChartW + ' ' + evoChartH"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <line
+              [attr.x1]="evoPadL"
+              [attr.y1]="evoPadT + evoInnerH()"
+              [attr.x2]="evoChartW - evoPadR"
+              [attr.y2]="evoPadT + evoInnerH()"
+              class="est-vend__chart-axis"
+            />
+            <text [attr.x]="evoPadL - 4" [attr.y]="evoPadT + 4" class="est-vend__evo-axis-label" text-anchor="end">
+              {{ formatPercentualDesconto(maxEvolDesconto) }}
+            </text>
+            <text [attr.x]="evoPadL - 4" [attr.y]="evoPadT + evoInnerH()" class="est-vend__evo-axis-label" text-anchor="end">
+              0%
+            </text>
+            <ng-container *ngFor="let mes of mesesOrdenados; let mi = index">
+              <text
+                [attr.x]="evoX(mi)"
+                [attr.y]="evoChartH - 8"
+                text-anchor="middle"
+                class="est-vend__chart-tick"
+              >
+                {{ mesLegendaPub(mes) }}
+              </text>
+            </ng-container>
+            <g *ngFor="let v of vendedoresEvolucao; let vi = index">
+              <polyline
+                fill="none"
+                [attr.stroke]="corLinhaVi(vi)"
+                stroke-width="2"
+                [attr.points]="polylineDesconto(v)"
+              />
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="est-vend__tendencia-wrap">
+        <h4 *ngIf="mesesOrdenados.length >= 2" class="est-vend__subchart-title">
+          Tendência: último mês vs. penúltimo ({{
+            mesLegendaPub(mesesOrdenados[mesesOrdenados.length - 1]!)
+          }}
+          × {{ mesLegendaPub(mesesOrdenados[mesesOrdenados.length - 2]!) }})
+        </h4>
+        <h4 *ngIf="mesesOrdenados.length < 2" class="est-vend__subchart-title">
+          Tendência: penúltimo vs. último mês
+        </h4>
+        <p *ngIf="mesesOrdenados.length < 2" class="est-vend__tendencia-aviso">
+          Inclua <strong>pelo menos dois meses</strong> com vendas no período para ver melhora/piora.
+        </p>
+        <div *ngIf="tendencias.length > 0" class="est-vend__table-scroll est-vend__table-scroll--tend">
+          <table class="est-vend__table est-vend__table--tend">
+            <thead>
+              <tr>
+                <th scope="col">Vendedor</th>
+                <th scope="col">Líquido (var.)</th>
+                <th scope="col">O.S. (var.)</th>
+                <th scope="col">Ticket médio (var.)</th>
+                <th scope="col">Desconto % (var.)</th>
+                <th scope="col">Síntese (líquido)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of tendencias">
+                <td>{{ t.vendedor }}</td>
+                <td
+                  [ngClass]="{
+                    'est-vend__tend--melhora': t.tendenciaLiquido === 'melhora',
+                    'est-vend__tend--piora': t.tendenciaLiquido === 'piora',
+                    'est-vend__tend--estavel': t.tendenciaLiquido === 'estavel',
+                    'est-vend__tend--na': t.tendenciaLiquido === 'n/a'
+                  }"
+                >
+                  {{ textoTendenciaLiquido(t) }}
+                </td>
+                <td
+                  [ngClass]="{
+                    'est-vend__tend--melhora': t.tendenciaQtd === 'melhora',
+                    'est-vend__tend--piora': t.tendenciaQtd === 'piora',
+                    'est-vend__tend--estavel': t.tendenciaQtd === 'estavel',
+                    'est-vend__tend--na': t.tendenciaQtd === 'n/a'
+                  }"
+                >
+                  {{ textoTendenciaQtdOs(t) }}
+                </td>
+                <td
+                  [ngClass]="{
+                    'est-vend__tend--melhora': t.tendenciaTicket === 'melhora',
+                    'est-vend__tend--piora': t.tendenciaTicket === 'piora',
+                    'est-vend__tend--estavel': t.tendenciaTicket === 'estavel',
+                    'est-vend__tend--na': t.tendenciaTicket === 'n/a'
+                  }"
+                >
+                  {{ textoTendenciaTicketMes(t) }}
+                </td>
+                <td
+                  [ngClass]="{
+                    'est-vend__tend--melhora': t.tendenciaDesconto === 'melhora',
+                    'est-vend__tend--piora': t.tendenciaDesconto === 'piora',
+                    'est-vend__tend--estavel': t.tendenciaDesconto === 'estavel',
+                    'est-vend__tend--na': t.tendenciaDesconto === 'n/a'
+                  }"
+                >
+                  {{ textoTendenciaDesconto(t) }}
+                </td>
+                <td class="est-vend__sintese">{{ t.sinteseDriverLiquido }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="est-vend__table-wrap">
+      <h3 class="est-vend__sec-title">Detalhamento</h3>
+      <table class="est-vend__table">
+        <thead>
+          <tr>
+            <th scope="col">Vendedor</th>
+            <th scope="col" class="est-vend__num">Valor líquido</th>
+            <th scope="col" class="est-vend__num">Ticket médio</th>
+            <th scope="col" class="est-vend__num">% desc. médio (pond.)</th>
+            <th scope="col" class="est-vend__num">Total desconto</th>
+            <th scope="col" class="est-vend__num">O.S. distintas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of linhasRanking">
+            <td>{{ r.vendedor }}</td>
+            <td class="est-vend__num">{{ formatMoeda(r.valorLiquido) }}</td>
+            <td class="est-vend__num">{{ formatMoeda(r.ticketMedio) }}</td>
+            <td class="est-vend__num">{{ formatPercentualDesconto(r.descontoMedioPct) }}</td>
+            <td class="est-vend__num">{{ formatMoeda(r.valorTotalDesconto) }}</td>
+            <td class="est-vend__num">{{ formatInteiro(r.qtdVendasDistintas) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div
+    *ngIf="modalMetricasAberto"
+    class="est-vend__modal-root"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="est-vend-modal-metricas-title"
+    (click)="fecharModalMetricas()"
+  >
+    <div class="est-vend__modal-panel" (click)="$event.stopPropagation()">
+      <div class="est-vend__modal-head">
+        <h2 id="est-vend-modal-metricas-title" class="est-vend__modal-title">Definições das métricas</h2>
+        <button type="button" class="est-vend__modal-close" (click)="fecharModalMetricas()" aria-label="Fechar">
+          ×
+        </button>
+      </div>
+      <div class="est-vend__modal-body">
+        <p class="est-vend__modal-lead">
+          Fonte dos dados: relatório <strong>Produtos por O.S.</strong> (SavWin), filtrado por lojas e período. O
+          <strong>líquido por linha</strong> segue a mesma lógica do painel <strong>Faturamento</strong> (rateio pelo
+          preço da linha quando existe valor líquido total na venda).
+        </p>
+        <dl class="est-vend__modal-dl">
+          <dt>Total líquido (período)</dt>
+          <dd>Soma do valor líquido alocado às linhas de produto do vendedor no intervalo.</dd>
+          <dt>O.S. distintas</dt>
+          <dd>Quantidade de ordens de venda (código de venda) distintas com pelo menos uma linha daquele vendedor.</dd>
+          <dt>Ticket médio</dt>
+          <dd>Total líquido do vendedor ÷ O.S. distintas no período.</dd>
+          <dt>% desconto médio ponderado</dt>
+          <dd>Média do percentual de desconto da venda, ponderada pelo líquido alocado a cada venda (chave loja + O.S.).</dd>
+          <dt>Evolução no tempo (gráficos)</dt>
+          <dd>
+            Agregação por <strong>mês de data da venda</strong>. Curvas do <strong>top 6</strong> vendedores por líquido
+            total no período filtrado.
+          </dd>
+          <dt>Tendência — Líquido (var.)</dt>
+          <dd>
+            Variação percentual do líquido do vendedor entre o <strong>penúltimo</strong> e o <strong>último</strong> mês
+            com dados no período: <code>(último − penúltimo) / penúltimo × 100</code>. &gt; 0,5% conta como melhora;
+            &lt; −0,5% como piora.
+          </dd>
+          <dt>Tendência — O.S. (var.)</dt>
+          <dd>
+            Mesma fórmula sobre a contagem de O.S. distintas do vendedor em cada mês. Mais O.S. = melhora na coluna;
+            menos = piora (limite 0,5%).
+          </dd>
+          <dt>Tendência — Ticket médio (var.)</dt>
+          <dd>
+            Ticket de cada mês = líquido do mês ÷ O.S. daquele mês. Variação percentual mês a mês; ticket maior = melhora
+            (limite 0,5%).
+          </dd>
+          <dt>Tendência — Desconto % (var.)</dt>
+          <dd>
+            Diferença em <strong>pontos percentuais</strong> entre o % desconto médio ponderado do último e do
+            penúltimo mês. Valor <strong>negativo</strong> = descontou menos em média (melhora para margem). Limite de
+            estabilidade: 0,2 p.p.
+          </dd>
+          <dt>Síntese (líquido)</dt>
+          <dd>
+            Leitura automática: indica se a alta ou queda de líquido entre os dois meses parece vir <strong>mais de
+            mudança na quantidade de O.S.</strong> ou <strong>mais do ticket médio</strong>, comparando as variações %
+            das duas colunas (regra com margem de ~15% entre elas).
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>

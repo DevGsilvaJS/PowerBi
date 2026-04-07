@@ -10,6 +10,7 @@ import { EstoqueComponent } from './estoque/estoque.component';
 import { FaturamentoComponent } from './faturamento/faturamento.component';
 import { ComparativoAnualVendasComponent } from './comparativo-anual-vendas/comparativo-anual-vendas.component';
 import { ComparativoAnualFinanceiroComponent } from './comparativo-anual-financeiro/comparativo-anual-financeiro.component';
+import { EstatisticasVendedoresComponent } from './estatisticas-vendedores/estatisticas-vendedores.component';
 import { FinanceiroComponent } from './financeiro/financeiro.component';
 import { ResumoGeralComponent } from './resumo-geral/resumo-geral.component';
 import { GestaoClientesComponent } from './gestao-clientes/gestao-clientes.component';
@@ -24,6 +25,7 @@ import { LojasMultiDropdownComponent } from './shared/lojas-multi-dropdown/lojas
     ShellComponent,
     ResumoGeralComponent,
     FaturamentoComponent,
+    EstatisticasVendedoresComponent,
     EstoqueComponent,
     FinanceiroComponent,
     ComparativoAnualVendasComponent,
