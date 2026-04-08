@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of, throwError } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { ComparativoFinanceiroCacheDto } from '../financeiro/comparativo-financeiro-cache.model';
 import {
   ContasPagarPagasGridItem,
   ContasPagarPagasGridRequest,
@@ -49,6 +50,7 @@ export class RelatoriosApiService {
   private readonly urlEntradasEstoqueGrid = `${this.base}/entradas-estoque-grid`;
   private readonly urlContasPagarPagasGrid = `${this.base}/contas-pagar-pagas-grid`;
   private readonly urlContasReceberRecebidasGrid = `${this.base}/contas-receber-recebidas-grid`;
+  private readonly urlComparativoFinanceiroCache = `${this.base}/comparativo-financeiro-cache`;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -121,5 +123,57 @@ export class RelatoriosApiService {
       pagamentoVenda2: body.pagamentoVenda2?.trim() || null,
       tipoPeriodo: body.tipoPeriodo?.trim() || '1'
     }).pipe(map((raw) => parseRespostaContasReceberRecebidasGrid(raw)));
+  }
+
+  /**
+   * Snapshot persistido do comparativo financeiro; <code>null</code> se não houver (404).
+   */
+  getComparativoFinanceiroCache(
+    anoMenor: number,
+    anoMaior: number,
+    lojaId?: string | null
+  ): Observable<ComparativoFinanceiroCacheDto | null> {
+    let params = new HttpParams()
+      .set('anoMenor', String(anoMenor))
+      .set('anoMaior', String(anoMaior));
+    const loja = lojaId?.trim();
+    if (loja) {
+      params = params.set('lojaId', loja);
+    }
+    const headers = new HttpHeaders({
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache'
+    });
+    return this.http
+      .get<ComparativoFinanceiroCacheDto>(this.urlComparativoFinanceiroCache, { params, headers })
+      .pipe(
+        catchError((err: HttpErrorResponse) =>
+          err.status === 404 ? of(null) : throwError(() => err)
+        )
+      );
+  }
+
+  putComparativoFinanceiroCache(body: {
+    anoMenor: number;
+    anoMaior: number;
+    lojaId: string | null;
+    seriePagas: unknown;
+    serieRecebidas: unknown;
+    formasPagas: unknown;
+    formasRecebidas: unknown;
+  }): Observable<void> {
+    return this.http.put<void>(this.urlComparativoFinanceiroCache, {
+      anoMenor: body.anoMenor,
+      anoMaior: body.anoMaior,
+      lojaId: body.lojaId?.trim() || null,
+      seriePagas: body.seriePagas,
+      serieRecebidas: body.serieRecebidas,
+      formasPagas: body.formasPagas,
+      formasRecebidas: body.formasRecebidas
+    });
+  }
+
+  deleteComparativoFinanceiroCache(): Observable<void> {
+    return this.http.delete<void>(this.urlComparativoFinanceiroCache);
   }
 }

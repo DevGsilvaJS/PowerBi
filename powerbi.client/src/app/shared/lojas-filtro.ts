@@ -32,6 +32,29 @@ export function lojaIdsParaParametroApi(lojas: LojaOption[], selecionadas: strin
   return sel.sort().join(',');
 }
 
+/**
+ * Com mais de uma loja no cadastro, se o usuário marcar <strong>todas</strong>,
+ * o parâmetro vira “todas na API”. Use para exigir escolha explícita de uma loja.
+ */
+export function mensagemSelecioneApenasUmaLojaSeTodasMarcadas(
+  lojas: LojaOption[],
+  selecionadas: string[]
+): string | null {
+  if (lojas.length <= 1) {
+    return null;
+  }
+  const setAll = new Set(lojas.map((l) => l.id));
+  const sel = [...new Set(selecionadas.map((s) => s.trim()).filter((s) => s.length > 0))];
+  if (sel.length === 0) {
+    return null;
+  }
+  const todasMarcadas = sel.length === setAll.size && sel.every((id) => setAll.has(id));
+  if (!todasMarcadas) {
+    return null;
+  }
+  return 'Selecione apenas uma loja (não use a opção "Todas as lojas").';
+}
+
 /** Lista de IDs para chamadas que aceitam só uma loja por requisição (ex.: estoque). */
 export function lojaIdsParaListaChamadasIndividuais(
   lojas: LojaOption[],

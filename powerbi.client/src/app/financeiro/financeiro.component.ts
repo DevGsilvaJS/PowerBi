@@ -25,7 +25,8 @@ export interface ReceberPorFormaPagamento {
 })
 export class FinanceiroComponent implements OnInit {
   lojas: LojaOption[] = [];
-  lojaIdsSelecionadas: string[] = [];
+  /** Resumo financeiro: uma loja por consulta (evita grade multi-loja pesada na SavWin). */
+  lojaIdSelecionada: string | null = null;
 
   /** Período de emissão da duplicata (DUPEMISSAO1 / DUPEMISSAO2) */
   duplicataEmissao1 = '';
@@ -62,7 +63,7 @@ export class FinanceiroComponent implements OnInit {
 
   montarLojasDoCadastro(): void {
     this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    this.lojaIdSelecionada = this.lojas.length > 0 ? this.lojas[0].id : null;
   }
 
   pesquisar(): void {
@@ -81,12 +82,18 @@ export class FinanceiroComponent implements OnInit {
       this.periodoErro = 'A data final não pode ser anterior à inicial.';
       return;
     }
-    if (this.lojas.length > 0 && this.lojaIdsSelecionadas.length === 0) {
-      this.periodoErro = 'Selecione ao menos uma loja.';
-      return;
+    if (this.lojas.length > 0) {
+      const id = this.lojaIdSelecionada?.trim() ?? '';
+      if (!id || !this.lojas.some((l) => l.id === id)) {
+        this.periodoErro = 'Selecione uma loja.';
+        return;
+      }
     }
 
-    const lojaParam = lojaIdsParaParametroApi(this.lojas, this.lojaIdsSelecionadas);
+    const lojaParam =
+      this.lojas.length === 0
+        ? null
+        : lojaIdsParaParametroApi(this.lojas, [this.lojaIdSelecionada!.trim()]);
     const base: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
       lojaId: lojaParam,
       duplicataEmissao1: d1,

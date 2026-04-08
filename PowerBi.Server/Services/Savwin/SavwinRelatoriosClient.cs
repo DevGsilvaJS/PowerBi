@@ -1,10 +1,13 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PowerBi.Server.DTOs;
 using PowerBi.Server.Entities;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace PowerBi.Server.Services.Savwin;
@@ -29,11 +32,16 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         "https://api.savwinweb.com.br/api/APIRelatoriosCR/ProdutosCadastradosGrid";
 
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMemoryCache _memoryCache;
     private readonly ILogger<SavwinRelatoriosClient> _logger;
 
-    public SavwinRelatoriosClient(IHttpClientFactory httpClientFactory, ILogger<SavwinRelatoriosClient> logger)
+    public SavwinRelatoriosClient(
+        IHttpClientFactory httpClientFactory,
+        IMemoryCache memoryCache,
+        ILogger<SavwinRelatoriosClient> logger)
     {
         _httpClientFactory = httpClientFactory;
+        _memoryCache = memoryCache;
         _logger = logger;
     }
 
@@ -65,64 +73,93 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         client.Timeout = TimeSpan.FromMinutes(2);
 
         HttpResponseMessage response;
+        var swHttp = Stopwatch.StartNew();
         try
         {
             response = await client.SendAsync(httpRequest, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao chamar Savwin ProdutosPorOS");
+            swHttp.Stop();
+            _logger.LogError(ex, "Falha ao chamar Savwin ProdutosPorOS (HTTP {HttpMs}ms)", swHttp.ElapsedMilliseconds);
             throw new InvalidOperationException("Falha ao contatar a API externa.", ex);
         }
 
+        swHttp.Stop();
+        var swRead = Stopwatch.StartNew();
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        swRead.Stop();
+
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Savwin HTTP {Status}: {Body}", response.StatusCode, body);
+            _logger.LogWarning(
+                "Savwin ProdutosPorOS HTTP {Status} após HTTP {HttpMs}ms, leitura corpo {ReadMs}ms: {Body}",
+                response.StatusCode,
+                swHttp.ElapsedMilliseconds,
+                swRead.ElapsedMilliseconds,
+                body);
             throw new InvalidOperationException($"Savwin HTTP {(int)response.StatusCode}");
         }
 
         try
         {
+            var swParse = Stopwatch.StartNew();
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
+            IReadOnlyList<ProdutoPorOsItem> result;
             if (root.ValueKind == JsonValueKind.Array)
             {
                 var list = JsonSerializer.Deserialize<List<ProdutoPorOsSavwinDto>>(body, options);
                 if (list is null)
                 {
-                    return Array.Empty<ProdutoPorOsItem>();
+                    result = Array.Empty<ProdutoPorOsItem>();
                 }
-
-                var i = 0;
-                foreach (var row in root.EnumerateArray())
+                else
                 {
-                    if (i >= list.Count)
+                    var i = 0;
+                    foreach (var row in root.EnumerateArray())
                     {
-                        break;
+                        if (i >= list.Count)
+                        {
+                            break;
+                        }
+
+                        AplicarCodigoDaVendaDoJsonNaLinha(list[i], row);
+                        i++;
                     }
 
-                    AplicarCodigoDaVendaDoJsonNaLinha(list[i], row);
-                    i++;
+                    result = ProdutoPorOsSavwinMapping.ToApiItems(list);
                 }
-
-                return ProdutoPorOsSavwinMapping.ToApiItems(list);
             }
-
-            if (root.ValueKind == JsonValueKind.Object)
+            else if (root.ValueKind == JsonValueKind.Object)
             {
                 var one = JsonSerializer.Deserialize<ProdutoPorOsSavwinDto>(body, options);
                 if (one is null)
                 {
-                    return Array.Empty<ProdutoPorOsItem>();
+                    result = Array.Empty<ProdutoPorOsItem>();
                 }
-
-                AplicarCodigoDaVendaDoJsonNaLinha(one, root);
-                return new[] { ProdutoPorOsSavwinMapping.ToApiItem(one) };
+                else
+                {
+                    AplicarCodigoDaVendaDoJsonNaLinha(one, root);
+                    result = new[] { ProdutoPorOsSavwinMapping.ToApiItem(one) };
+                }
+            }
+            else
+            {
+                result = Array.Empty<ProdutoPorOsItem>();
             }
 
-            return Array.Empty<ProdutoPorOsItem>();
+            swParse.Stop();
+            _logger.LogInformation(
+                "Savwin ProdutosPorOS [externo]: HTTP {HttpMs}ms, leitura corpo {ReadMs}ms ({BodyBytes} bytes), parse/mapeamento {ParseMs}ms, itens {Count}",
+                swHttp.ElapsedMilliseconds,
+                swRead.ElapsedMilliseconds,
+                body.Length,
+                swParse.ElapsedMilliseconds,
+                result.Count);
+
+            return result;
         }
         catch (JsonException ex)
         {
@@ -343,21 +380,52 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken = default) =>
-        PostContasTitulosGridAsync(SavwinContasPagarPagasGridUrl, "ContasPagarPagasGrid", cliente, request, cancellationToken);
+        FetchContasTitulosGridCachedAsync(
+            "contas_pagar",
+            SavwinContasPagarPagasGridUrl,
+            "ContasPagarPagasGrid",
+            cliente,
+            request,
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<string> FetchContasReceberRecebidasGridRawJsonAsync(
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken = default) =>
-        PostContasTitulosGridAsync(SavwinContasReceberRecebidasGridUrl, "ContasReceberRecebidasGrid", cliente, request, cancellationToken);
+        FetchContasTitulosGridCachedAsync(
+            "contas_receber",
+            SavwinContasReceberRecebidasGridUrl,
+            "ContasReceberRecebidasGrid",
+            cliente,
+            request,
+            cancellationToken);
 
-    private async Task<string> PostContasTitulosGridAsync(
+    /// <summary>
+    /// Cache em memória (10 min) por cliente + hash do payload enviado à SavWin — separado entre pagar e receber.
+    /// </summary>
+    private async Task<string> FetchContasTitulosGridCachedAsync(
+        string cacheKeyPrefix,
         string savwinUrl,
         string logName,
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken)
+    {
+        var payloadJson = BuildContasTitulosGridPayloadJson(cliente, request);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
+        var cacheKey = $"{cacheKeyPrefix}:{cliente.Id}:{hash}";
+
+        return await _memoryCache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await PostContasTitulosGridAsync(savwinUrl, logName, cliente, request, cancellationToken);
+        }) ?? throw new InvalidOperationException("Cache retornou resultado inesperado.");
+    }
+
+    private static string BuildContasTitulosGridPayloadJson(
+        GestaoCliente cliente,
+        ContasPagarPagasGridClientRequest request)
     {
         var filid = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
         var status = NormalizeStatusRecebido(request.StatusRecebido);
@@ -381,7 +449,17 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             ["TIPOPERIODO"] = tipoPeriodo
         };
 
-        var json = JsonSerializer.Serialize(payload);
+        return JsonSerializer.Serialize(payload);
+    }
+
+    private async Task<string> PostContasTitulosGridAsync(
+        string savwinUrl,
+        string logName,
+        GestaoCliente cliente,
+        ContasPagarPagasGridClientRequest request,
+        CancellationToken cancellationToken)
+    {
+        var json = BuildContasTitulosGridPayloadJson(cliente, request);
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, savwinUrl);
         httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
         httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
@@ -389,25 +467,49 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
         var http = _httpClientFactory.CreateClient();
-        http.Timeout = TimeSpan.FromMinutes(2);
+        // Contas em grade podem demorar; 502 no cliente costuma ser timeout ou corpo grande.
+        http.Timeout = TimeSpan.FromMinutes(5);
 
         HttpResponseMessage response;
+        var swHttp = Stopwatch.StartNew();
         try
         {
             response = await http.SendAsync(httpRequest, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao chamar Savwin {LogName}", logName);
+            swHttp.Stop();
+            _logger.LogError(ex, "Falha ao chamar Savwin {LogName} (HTTP {HttpMs}ms)", logName, swHttp.ElapsedMilliseconds);
             throw new InvalidOperationException("Falha ao contatar a API externa.", ex);
         }
 
+        swHttp.Stop();
+        var swRead = Stopwatch.StartNew();
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        swRead.Stop();
+
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Savwin {LogName} HTTP {Status}: {Body}", logName, response.StatusCode, body);
-            throw new InvalidOperationException($"Savwin HTTP {(int)response.StatusCode}");
+            _logger.LogWarning(
+                "Savwin {LogName} HTTP {Status} após HTTP {HttpMs}ms, leitura corpo {ReadMs}ms: {Body}",
+                logName,
+                response.StatusCode,
+                swHttp.ElapsedMilliseconds,
+                swRead.ElapsedMilliseconds,
+                body);
+            var detalhe = body.Length > 500 ? body[..500] + "…" : body;
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(detalhe)
+                    ? $"SavWin retornou HTTP {(int)response.StatusCode}."
+                    : $"SavWin HTTP {(int)response.StatusCode}: {detalhe}");
         }
+
+        _logger.LogInformation(
+            "Savwin {LogName} OK: HTTP {HttpMs}ms, leitura corpo {ReadMs}ms, {Bytes} bytes",
+            logName,
+            swHttp.ElapsedMilliseconds,
+            swRead.ElapsedMilliseconds,
+            body.Length);
 
         return body;
     }

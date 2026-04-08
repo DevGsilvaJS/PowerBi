@@ -30,4 +30,7 @@ public class GestaoCliente
     public string Lojas { get; set; } = string.Empty;
 
     public DateTime CriadoEm { get; set; }
+
+    /// <summary>Última vez em que o comparativo financeiro foi atualizado a partir da SavWin (PUT do cache).</summary>
+    public DateTime? ComparativoFinanceiroUltimaConsultaUtc { get; set; }
 }

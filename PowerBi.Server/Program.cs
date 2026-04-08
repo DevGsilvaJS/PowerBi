@@ -30,6 +30,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IIntegracaoApiService, IntegracaoApiService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISavwinRelatoriosClient, SavwinRelatoriosClient>();
 builder.Services.AddScoped<IFaturamentoPainelService, FaturamentoPainelService>();
 

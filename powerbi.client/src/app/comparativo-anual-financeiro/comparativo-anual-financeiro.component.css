@@ -10,3 +10,200 @@
 .chart-panel + .chart-panel {
   margin-top: 1.25rem;
 }
+
+.filtros-acoes--duo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-limpar-cache {
+  padding: 0.55rem 1rem;
+  font-size: var(--app-font-body);
+  font-weight: 600;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-limpar-cache:hover:not(:disabled) {
+  background: rgba(153, 27, 27, 0.45);
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.btn-limpar-cache:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filtros-cache-ok {
+  margin: 0.5rem 0 0;
+  font-size: var(--app-font-muted);
+  color: #86efac;
+}
+
+/* Barras dos gráficos: crescem de baixo para cima ao carregar / nova pesquisa */
+.comparativo-anual .chart-svg .chart-bar.chart-bar--rise {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: cmp-fin-bar-rise 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--cmp-delay-ms, 0) * 1ms);
+}
+
+@keyframes cmp-fin-bar-rise {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comparativo-anual .chart-svg .chart-bar.chart-bar--rise {
+    animation: none;
+  }
+}
+
+.forma-pgto-comparativo {
+  margin-top: 1.25rem;
+}
+
+.despesas-plano-subcard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 10rem;
+  max-height: 22rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+}
+
+.despesas-plano-subtitle {
+  margin: 0 0 0.35rem;
+  font-size: var(--app-font-subtitle);
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.despesas-plano-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+}
+
+.despesas-plano-vazio {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: var(--app-font-body);
+  color: #64748b;
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.receber-forma-dupla {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .receber-forma-dupla {
+    grid-template-columns: 1fr;
+  }
+}
+
+.receber-forma-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto) minmax(3.25rem, auto);
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.receber-forma-nome {
+  font-size: var(--app-font-subtitle);
+  font-weight: 600;
+  color: #cbd5e1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.35;
+}
+
+.receber-forma-valor {
+  font-size: var(--app-font-muted);
+  font-weight: 700;
+  color: #f1f5f9;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.receber-forma-pct {
+  font-size: var(--app-font-body);
+  font-weight: 700;
+  color: #a5b4fc;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .receber-forma-linha {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .receber-forma-valor,
+  .receber-forma-pct {
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .receber-forma-valor::before {
+    content: 'Valor';
+    font-size: var(--app-font-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+  }
+
+  .receber-forma-pct::before {
+    content: '%';
+    font-size: var(--app-font-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+  }
+}

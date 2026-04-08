@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PowerBi.Server.Data;
@@ -11,9 +12,11 @@ using PowerBi.Server.Data;
 namespace PowerBi.Server.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260408034246_InadimplenciaFinanceiraSnapshot")]
+    partial class InadimplenciaFinanceiraSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,61 +24,6 @@ namespace PowerBi.Server.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("PowerBi.Server.Entities.GestaoCliente", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ChaveWs")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("chave_ws");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("criado_em")
-                        .HasDefaultValueSql("timezone('utc', now())");
-
-                    b.Property<string>("Identificador")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("identificador");
-
-                    b.Property<string>("Lojas")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("lojas");
-
-                    b.Property<string>("Senha")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("senha");
-
-                    b.Property<string>("Usuario")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("usuario");
-
-                    b.Property<DateTime?>("ComparativoFinanceiroUltimaConsultaUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("comparativo_financeiro_ultima_consulta_utc");
-
-                    b.HasKey("Id")
-                        .HasName("pk_gestaoclientes");
-
-                    b.ToTable("gestaoclientes", (string)null);
-                });
 
             modelBuilder.Entity("PowerBi.Server.Entities.ComparativoFinanceiroSnapshotPagar", b =>
                 {
@@ -183,13 +131,69 @@ namespace PowerBi.Server.Data.Migrations
                     b.ToTable("comparativo_financeiro_snapshot_receber", (string)null);
                 });
 
+            modelBuilder.Entity("PowerBi.Server.Entities.GestaoCliente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ChaveWs")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("chave_ws");
+
+                    b.Property<DateTime?>("ComparativoFinanceiroUltimaConsultaUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("comparativo_financeiro_ultima_consulta_utc");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<string>("Identificador")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("identificador");
+
+                    b.Property<string>("Lojas")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("lojas");
+
+                    b.Property<string>("Senha")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("senha");
+
+                    b.Property<string>("Usuario")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("usuario");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gestaoclientes");
+
+                    b.ToTable("gestaoclientes", (string)null);
+                });
+
             modelBuilder.Entity("PowerBi.Server.Entities.ComparativoFinanceiroSnapshotPagar", b =>
                 {
                     b.HasOne("PowerBi.Server.Entities.GestaoCliente", "GestaoCliente")
                         .WithMany()
                         .HasForeignKey("GestaoClienteId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_comparativo_financeiro_snapshot_pagar_gestaoclientes_gestao");
 
                     b.Navigation("GestaoCliente");
                 });
@@ -200,7 +204,8 @@ namespace PowerBi.Server.Data.Migrations
                         .WithMany()
                         .HasForeignKey("GestaoClienteId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_comparativo_financeiro_snapshot_receber_gestaoclientes_gest");
 
                     b.Navigation("GestaoCliente");
                 });

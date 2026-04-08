@@ -44,14 +44,24 @@
             title="Ex.: 2025"
           />
         </label>
-        <div class="filtros-acoes">
-          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+        <div class="filtros-acoes filtros-acoes--duo">
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando || apagandoDadosServidor">
             {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+          </button>
+          <button
+            type="button"
+            class="btn-limpar-cache"
+            (click)="limparDadosSalvosComparativo()"
+            [disabled]="carregando || apagandoDadosServidor"
+            title="Apaga no PostgreSQL os comparativos salvos deste usuário; a próxima pesquisa busca na SavWin e grava de novo"
+          >
+            {{ apagandoDadosServidor ? 'Apagando…' : 'Apagar dados salvos' }}
           </button>
         </div>
       </div>
       <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
       <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+      <p *ngIf="cacheAcaoMensagem" class="filtros-cache-ok" role="status">{{ cacheAcaoMensagem }}</p>
     </form>
   </div>
 
@@ -112,7 +122,7 @@
               {{ formatMoedaCurta(tickValor(ti, maxChartPagas)) }}
             </text>
           </g>
-          <g *ngFor="let p of seriePagasValor; let i = index">
+          <g *ngFor="let p of seriePagasValor; let i = index; trackBy: trackByMesPagas">
             <text
               [attr.x]="slotX(i) + innerW / 24"
               [attr.y]="chartH - padB + 16"
@@ -136,7 +146,8 @@
                 [attr.y]="barY(p.anoAnterior, maxChartPagas)"
                 [attr.width]="o.barW"
                 [attr.height]="barHeight(p.anoAnterior, maxChartPagas)"
-                class="chart-bar chart-bar--ant"
+                class="chart-bar chart-bar--ant chart-bar--rise"
+                [style.--cmp-delay-ms]="48 * i"
                 rx="3"
               >
                 <title>{{ tituloBarraPagasAnt(p) }}</title>
@@ -146,7 +157,8 @@
                 [attr.y]="barY(p.anoAtual, maxChartPagas)"
                 [attr.width]="o.barW"
                 [attr.height]="barHeight(p.anoAtual, maxChartPagas)"
-                class="chart-bar chart-bar--atual"
+                class="chart-bar chart-bar--atual chart-bar--rise"
+                [style.--cmp-delay-ms]="48 * i + 26"
                 rx="3"
               >
                 <title>{{ tituloBarraPagasAtu(p) }}</title>
@@ -211,7 +223,7 @@
               {{ formatMoedaCurta(tickValor(ti, maxChartRecebidas)) }}
             </text>
           </g>
-          <g *ngFor="let p of serieRecebidasValor; let i = index">
+          <g *ngFor="let p of serieRecebidasValor; let i = index; trackBy: trackByMesRecebidas">
             <text
               [attr.x]="slotX(i) + innerW / 24"
               [attr.y]="chartH - padB + 16"
@@ -235,7 +247,8 @@
                 [attr.y]="barY(p.anoAnterior, maxChartRecebidas)"
                 [attr.width]="o.barW"
                 [attr.height]="barHeight(p.anoAnterior, maxChartRecebidas)"
-                class="chart-bar chart-bar--ant"
+                class="chart-bar chart-bar--ant chart-bar--rise"
+                [style.--cmp-delay-ms]="48 * i"
                 rx="3"
               >
                 <title>{{ tituloBarraRecAnt(p) }}</title>
@@ -245,7 +258,8 @@
                 [attr.y]="barY(p.anoAtual, maxChartRecebidas)"
                 [attr.width]="o.barW"
                 [attr.height]="barHeight(p.anoAtual, maxChartRecebidas)"
-                class="chart-bar chart-bar--atual"
+                class="chart-bar chart-bar--atual chart-bar--rise"
+                [style.--cmp-delay-ms]="48 * i + 26"
                 rx="3"
               >
                 <title>{{ tituloBarraRecAtu(p) }}</title>
@@ -253,6 +267,45 @@
             </ng-container>
           </g>
         </svg>
+    </div>
+  </section>
+
+  <section
+    *ngIf="jaPesquisou && !carregando && !apiErro"
+    class="chart-panel forma-pgto-comparativo"
+    aria-labelledby="cmp-fin-forma-title"
+  >
+    <h3 id="cmp-fin-forma-title" class="chart-panel__title">
+      Formas de pagamento
+      <span *ngIf="anoRef" class="chart-panel__subtitle">
+        ({{ anoAnterior }}–{{ anoRef }} · contas baixadas)
+      </span>
+    </h3>
+
+    <div class="receber-forma-dupla">
+      <div class="despesas-plano-subcard">
+        <h4 class="despesas-plano-subtitle">Contas pagas</h4>
+        <p *ngIf="formasPagasBaixadas.length === 0" class="despesas-plano-vazio">Nenhum dado para o filtro.</p>
+        <ul class="despesas-plano-lista" *ngIf="formasPagasBaixadas.length > 0">
+          <li *ngFor="let item of formasPagasBaixadas" class="receber-forma-linha">
+            <span class="receber-forma-nome" [attr.title]="item.forma">{{ item.forma }}</span>
+            <span class="receber-forma-valor">{{ formatMoeda(item.valor) }}</span>
+            <span class="receber-forma-pct">{{ formatPercentual(item.percentual) }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="despesas-plano-subcard">
+        <h4 class="despesas-plano-subtitle">Contas recebidas</h4>
+        <p *ngIf="formasRecebidasBaixadas.length === 0" class="despesas-plano-vazio">Nenhum dado para o filtro.</p>
+        <ul class="despesas-plano-lista" *ngIf="formasRecebidasBaixadas.length > 0">
+          <li *ngFor="let item of formasRecebidasBaixadas" class="receber-forma-linha">
+            <span class="receber-forma-nome" [attr.title]="item.forma">{{ item.forma }}</span>
+            <span class="receber-forma-valor">{{ formatMoeda(item.valor) }}</span>
+            <span class="receber-forma-pct">{{ formatPercentual(item.percentual) }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
   </section>
 </div>

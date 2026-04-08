@@ -17,6 +17,9 @@ export interface ContasReceberRecebidasGridItem {
   GRUPOPLANOCONTAS?: string;
   FORMA_PAGAMENTO?: string;
   FORMAPAGAMENTO?: string;
+  /** Data de vencimento da parcela (quando a SavWin envia). */
+  VENCIMENTO?: string;
+  PAR_VENCIMENTO?: string;
   RECEBIMENTO?: string;
   REC_RECEBIMENTO?: string;
   RECRECEBIMENTO?: string;
