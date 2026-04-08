@@ -2,7 +2,11 @@ import { Component, OnInit } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { RelatoriosApiService } from '../relatorios/relatorios-api.service';
-import { LojaOption, lojaIdsParaParametroApi, opcoesLojasDoCadastro } from '../shared/lojas-filtro';
+import {
+  LojaOption,
+  combinarLojasCadastroComSavwin,
+  lojaIdsParaParametroApi
+} from '../shared/lojas-filtro';
 import { ContasPagarPagasGridItem, ContasPagarPagasGridRequest } from './contas-pagar-pagas-grid.model';
 import { ContasReceberRecebidasGridItem } from './contas-receber-recebidas-grid.model';
 
@@ -28,7 +32,10 @@ export class FinanceiroComponent implements OnInit {
   /** Resumo financeiro: uma loja por consulta (evita grade multi-loja pesada na SavWin). */
   lojaIdSelecionada: string | null = null;
 
-  /** Período de emissão da duplicata (DUPEMISSAO1 / DUPEMISSAO2) */
+  /**
+   * Intervalo dd/mm/aaaa: contas a pagar usam <code>PAGAMENTOVENDA1/2</code> (SavWin);
+   * contas a receber usam <code>DUPEMISSAO</code> + <code>RECRECEBIMENTO</code> no mesmo intervalo.
+   */
   duplicataEmissao1 = '';
   duplicataEmissao2 = '';
 
@@ -51,7 +58,10 @@ export class FinanceiroComponent implements OnInit {
     const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
     this.duplicataEmissao1 = this.formatarDdMmYyyy(inicio);
     this.duplicataEmissao2 = this.formatarDdMmYyyy(hoje);
-    this.montarLojasDoCadastro();
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdSelecionada = this.lojas.length > 0 ? this.lojas[0].id : null;
+    });
   }
 
   private formatarDdMmYyyy(d: Date): string {
@@ -61,11 +71,6 @@ export class FinanceiroComponent implements OnInit {
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdSelecionada = this.lojas.length > 0 ? this.lojas[0].id : null;
-  }
-
   pesquisar(): void {
     this.periodoErro = '';
     this.apiErro = '';
@@ -73,7 +78,7 @@ export class FinanceiroComponent implements OnInit {
     const d1 = this.duplicataEmissao1?.trim() ?? '';
     const d2 = this.duplicataEmissao2?.trim() ?? '';
     if (!reData.test(d1) || !reData.test(d2)) {
-      this.periodoErro = 'Informe emissão inicial e final no formato dd/mm/aaaa.';
+      this.periodoErro = 'Informe o período inicial e final no formato dd/mm/aaaa.';
       return;
     }
     const [dia1, mes1, ano1] = d1.split('/').map((x) => parseInt(x, 10));
@@ -94,10 +99,28 @@ export class FinanceiroComponent implements OnInit {
       this.lojas.length === 0
         ? null
         : lojaIdsParaParametroApi(this.lojas, [this.lojaIdSelecionada!.trim()]);
-    const base: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
+    const basePagar: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
+      lojaId: lojaParam,
+      duplicataEmissao1: null,
+      duplicataEmissao2: null,
+      parVencimento1: null,
+      parVencimento2: null,
+      recRecebimento1: null,
+      recRecebimento2: null,
+      pagamentoVenda1: d1,
+      pagamentoVenda2: d2,
+      tipoPeriodo: '1'
+    };
+    const baseReceber: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
       lojaId: lojaParam,
       duplicataEmissao1: d1,
       duplicataEmissao2: d2,
+      parVencimento1: null,
+      parVencimento2: null,
+      recRecebimento1: d1,
+      recRecebimento2: d2,
+      pagamentoVenda1: null,
+      pagamentoVenda2: null,
       tipoPeriodo: '1'
     };
 
@@ -108,10 +131,10 @@ export class FinanceiroComponent implements OnInit {
     this.linhasReceberBaixado = [];
 
     forkJoin({
-      pagarAberto: this.relatorios.contasPagarPagasGrid({ ...base, statusRecebido: 'ABERTO' }),
-      pagarBaixado: this.relatorios.contasPagarPagasGrid({ ...base, statusRecebido: 'BAIXADO' }),
-      receberAberto: this.relatorios.contasReceberRecebidasGrid({ ...base, statusRecebido: 'ABERTO' }),
-      receberBaixado: this.relatorios.contasReceberRecebidasGrid({ ...base, statusRecebido: 'BAIXADO' })
+      pagarAberto: this.relatorios.contasPagarPagasGrid({ ...basePagar, statusRecebido: 'ABERTO' }),
+      pagarBaixado: this.relatorios.contasPagarPagasGrid({ ...basePagar, statusRecebido: 'BAIXADO' }),
+      receberAberto: this.relatorios.contasReceberRecebidasGrid({ ...baseReceber, statusRecebido: 'ABERTO' }),
+      receberBaixado: this.relatorios.contasReceberRecebidasGrid({ ...baseReceber, statusRecebido: 'BAIXADO' })
     }).subscribe({
       next: ({ pagarAberto, pagarBaixado, receberAberto, receberBaixado }) => {
         this.linhasAberto = pagarAberto ?? [];

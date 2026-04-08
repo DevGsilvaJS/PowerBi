@@ -1,6 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
-import { LojaOption, lojaIdsParaParametroApi, opcoesLojasDoCadastro } from '../shared/lojas-filtro';
+import {
+  LojaOption,
+  combinarLojasCadastroComSavwin,
+  lojaIdsParaParametroApi
+} from '../shared/lojas-filtro';
 import {
   agregarVendasDistintasPorAnoMes,
   agregarVendasLiquidoPorAnoMes,
@@ -53,12 +57,10 @@ export class ComparativoAnualVendasComponent implements OnInit {
     const ano = hoje.getFullYear();
     this.ano1 = ano - 1;
     this.ano2 = ano;
-    this.montarLojasDoCadastro();
-  }
-
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    });
   }
 
   pesquisar(): void {

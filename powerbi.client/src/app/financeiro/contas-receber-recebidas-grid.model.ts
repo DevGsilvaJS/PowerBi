@@ -23,6 +23,8 @@ export interface ContasReceberRecebidasGridItem {
   RECEBIMENTO?: string;
   REC_RECEBIMENTO?: string;
   RECRECEBIMENTO?: string;
+  /** Data de emissão da duplicata (DUPEMISSAO / EMISSAO na SavWin). */
+  EMISSAO?: string;
   [key: string]: string | undefined;
 }
 

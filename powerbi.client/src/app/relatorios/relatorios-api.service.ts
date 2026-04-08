@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, catchError, of, throwError } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, shareReplay } from 'rxjs/operators';
 import { ComparativoFinanceiroCacheDto } from '../financeiro/comparativo-financeiro-cache.model';
 import {
   ContasPagarPagasGridItem,
@@ -19,6 +19,7 @@ import {
   parseRespostaEntradasEstoqueGrid
 } from '../estoque/entradas-estoque-grid.model';
 import { environment } from '../../environments/environment';
+import { SavwinLojaItem } from '../shared/lojas-filtro';
 import { FaturamentoPainelResponse } from './faturamento-painel.model';
 import { ProdutoPorOsItem } from './produto-por-os.model';
 import { VendaResumoFormaPagamentoItem } from './venda-resumo-forma-pagamento.model';
@@ -51,8 +52,25 @@ export class RelatoriosApiService {
   private readonly urlContasPagarPagasGrid = `${this.base}/contas-pagar-pagas-grid`;
   private readonly urlContasReceberRecebidasGrid = `${this.base}/contas-receber-recebidas-grid`;
   private readonly urlComparativoFinanceiroCache = `${this.base}/comparativo-financeiro-cache`;
+  private readonly urlLojasSavwin = `${this.base}/lojas-savwin`;
+
+  private lojasSavwin$: Observable<SavwinLojaItem[]> | null = null;
 
   constructor(private readonly http: HttpClient) {}
+
+  /**
+   * Lista SavWin (<code>RetornaLista</code>): <code>id</code> = FILID; <code>codigo</code> para cruzar com o cadastro.
+   * Em falha de rede, emite lista vazia (o front usa o cadastro via <code>combinarLojasCadastroComSavwin</code>).
+   */
+  getLojasSavwin(): Observable<SavwinLojaItem[]> {
+    if (!this.lojasSavwin$) {
+      this.lojasSavwin$ = this.http.get<SavwinLojaItem[]>(this.urlLojasSavwin).pipe(
+        catchError(() => of([])),
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+    }
+    return this.lojasSavwin$;
+  }
 
   /** KPIs, material, grife e formas já agregados no servidor. */
   faturamentoPainel(body: ProdutosPorOsRequest): Observable<FaturamentoPainelResponse> {
@@ -97,8 +115,8 @@ export class RelatoriosApiService {
     return this.http.post<unknown>(this.urlContasPagarPagasGrid, {
       lojaId: body.lojaId?.trim() || null,
       statusRecebido: body.statusRecebido?.trim() || null,
-      duplicataEmissao1: body.duplicataEmissao1.trim(),
-      duplicataEmissao2: body.duplicataEmissao2.trim(),
+      duplicataEmissao1: body.duplicataEmissao1?.trim() ? body.duplicataEmissao1.trim() : null,
+      duplicataEmissao2: body.duplicataEmissao2?.trim() ? body.duplicataEmissao2.trim() : null,
       parVencimento1: body.parVencimento1?.trim() || null,
       parVencimento2: body.parVencimento2?.trim() || null,
       recRecebimento1: body.recRecebimento1?.trim() || null,
@@ -113,8 +131,8 @@ export class RelatoriosApiService {
     return this.http.post<unknown>(this.urlContasReceberRecebidasGrid, {
       lojaId: body.lojaId?.trim() || null,
       statusRecebido: body.statusRecebido?.trim() || null,
-      duplicataEmissao1: body.duplicataEmissao1.trim(),
-      duplicataEmissao2: body.duplicataEmissao2.trim(),
+      duplicataEmissao1: body.duplicataEmissao1?.trim() ?? '',
+      duplicataEmissao2: body.duplicataEmissao2?.trim() ?? '',
       parVencimento1: body.parVencimento1?.trim() || null,
       parVencimento2: body.parVencimento2?.trim() || null,
       recRecebimento1: body.recRecebimento1?.trim() || null,

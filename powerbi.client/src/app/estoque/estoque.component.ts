@@ -4,8 +4,8 @@ import { map } from 'rxjs/operators';
 import { AuthService } from '../auth/auth.service';
 import {
   LojaOption,
-  lojaIdsParaListaChamadasIndividuais,
-  opcoesLojasDoCadastro
+  combinarLojasCadastroComSavwin,
+  lojaIdsParaListaChamadasIndividuais
 } from '../shared/lojas-filtro';
 import { COLUNAS_ENTRADA_ESTOQUE, EntradasEstoqueGridItem } from './entradas-estoque-grid.model';
 import { RelatoriosApiService } from '../relatorios/relatorios-api.service';
@@ -42,12 +42,10 @@ export class EstoqueComponent implements OnInit {
     const s = `${dd}/${mm}/${yyyy}`;
     this.dataInicial = s;
     this.dataFinal = s;
-    this.montarLojasDoCadastro();
-  }
-
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    });
   }
 
   pesquisar(): void {

@@ -5,9 +5,9 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using PowerBi.Server.DTOs;
 using PowerBi.Server.Entities;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace PowerBi.Server.Services.Savwin;
@@ -30,6 +30,8 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
 
     private const string SavwinProdutosCadastradosGridUrl =
         "https://api.savwinweb.com.br/api/APIRelatoriosCR/ProdutosCadastradosGrid";
+
+    private const string SavwinListaLojasUrl = "https://api.savwinweb.com.br/api/APILojas/RetornaLista";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache _memoryCache;
@@ -457,17 +459,22 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Sem cache em memória: a grade de contas a pagar usa o mesmo contrato que a de receber, mas a SavWin responde
+    /// com volumes e formatos diferentes. Cache de 10 min por hash de payload fazia repetir por muito tempo resposta vazia
+    /// ou antiga após mudança de filtros no app (loja/período).
+    /// </remarks>
     public Task<string> FetchContasPagarPagasGridRawJsonAsync(
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken = default) =>
-        FetchContasTitulosGridCachedAsync(
-            "contas_pagar",
+        PostContasTitulosGridAsync(
             SavwinContasPagarPagasGridUrl,
             "ContasPagarPagasGrid",
             cliente,
             request,
-            cancellationToken);
+            cancellationToken,
+            filidViaRetornaLista: true);
 
     /// <inheritdoc />
     public Task<string> FetchContasReceberRecebidasGridRawJsonAsync(
@@ -493,28 +500,41 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken)
     {
-        var payloadJson = BuildContasTitulosGridPayloadJson(cliente, request);
+        var payloadJson = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, filidViaRetornaLista: false).ConfigureAwait(false);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
         var cacheKey = $"{cacheKeyPrefix}:{cliente.Id}:{hash}";
 
         return await _memoryCache.GetOrCreateAsync(cacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
-            return await PostContasTitulosGridAsync(savwinUrl, logName, cliente, request, cancellationToken);
-        }) ?? throw new InvalidOperationException("Cache retornou resultado inesperado.");
+            return await PostContasTitulosGridComJsonAsync(savwinUrl, logName, cliente, payloadJson, cancellationToken).ConfigureAwait(false);
+        }).ConfigureAwait(false) ?? throw new InvalidOperationException("Cache retornou resultado inesperado.");
     }
 
-    private static string BuildContasTitulosGridPayloadJson(
+    private async Task<string> BuildContasTitulosGridPayloadJsonAsync(
         GestaoCliente cliente,
-        ContasPagarPagasGridClientRequest request)
+        ContasPagarPagasGridClientRequest request,
+        CancellationToken cancellationToken,
+        bool filidViaRetornaLista)
     {
-        var filid = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+        string filid;
+        if (filidViaRetornaLista)
+        {
+            // Contas a pagar: consome RetornaLista, pega o Id (FILID no JSON) e envia em FILID — não o FILSEQUENTIAL.
+            filid = await ObterFilidDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("SavWin ContasPagarPagasGrid: RetornaLista → FILID = {Filid}", filid);
+        }
+        else
+        {
+            filid = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+        }
         var status = NormalizeStatusRecebido(request.StatusRecebido);
         var tipoPeriodo = string.IsNullOrWhiteSpace(request.TipoPeriodo) ? "1" : request.TipoPeriodo.Trim();
 
         var du1 = SavwinRelatorioParametros.ToSavwinDate(request.DuplicataEmissao1 ?? string.Empty);
         var du2 = SavwinRelatorioParametros.ToSavwinDate(request.DuplicataEmissao2 ?? string.Empty);
 
+        // Mesmas chaves que a SavWin documenta (ex.: FILID + STATUSRECEBIDO + DUPEMISSAO nulos + PAGAMENTOVENDA1/2 + TIPOPERIODO).
         var payload = new Dictionary<string, object?>
         {
             ["FILID"] = filid,
@@ -538,9 +558,20 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         string logName,
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
+        CancellationToken cancellationToken,
+        bool filidViaRetornaLista)
+    {
+        var json = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, filidViaRetornaLista).ConfigureAwait(false);
+        return await PostContasTitulosGridComJsonAsync(savwinUrl, logName, cliente, json, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> PostContasTitulosGridComJsonAsync(
+        string savwinUrl,
+        string logName,
+        GestaoCliente cliente,
+        string json,
         CancellationToken cancellationToken)
     {
-        var json = BuildContasTitulosGridPayloadJson(cliente, request);
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, savwinUrl);
         httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
         httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
@@ -647,6 +678,297 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             JsonValueKind.False => "0",
             _ => null
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SavwinLojaListaItemDto>> FetchListaLojasAsync(
+        GestaoCliente cliente,
+        CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, SavwinListaLojasUrl);
+        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
+        httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
+        httpRequest.Content = new StringContent(string.Empty, Encoding.UTF8, "application/json");
+        httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        var http = _httpClientFactory.CreateClient();
+        http.Timeout = TimeSpan.FromMinutes(1);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao chamar SavWin RetornaLista");
+            throw new InvalidOperationException("Falha ao contatar a API de lojas SavWin.", ex);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detalhe = body.Length > 500 ? body[..500] + "…" : body;
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(detalhe)
+                    ? $"SavWin RetornaLista HTTP {(int)response.StatusCode}."
+                    : $"SavWin RetornaLista HTTP {(int)response.StatusCode}: {detalhe}");
+        }
+
+        var list = ParseListaLojasSavwinJson(body);
+        _logger.LogInformation("SavWin RetornaLista: {Count} lojas, {Bytes} bytes", list.Count, body.Length);
+        return list;
+    }
+
+    private static List<SavwinLojaListaItemDto> ParseListaLojasSavwinJson(string body)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        var list = new List<SavwinLojaListaItemDto>();
+        foreach (var el in EnumerateArrayElements(root))
+        {
+            if (el.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            // RetornaLista (SavWin): FILID = id interno; FILSEQUENCIAL = código de loja (cadastro do cliente).
+            var id = GetSavwinStringProp(
+                el,
+                "FILID",
+                "ID",
+                "Id",
+                "IDLOJA",
+                "ID_LOJA",
+                "IdFilial",
+                "IdLoja",
+                "COD_FILIAL");
+            var codigo = GetSavwinStringProp(
+                el,
+                "FILSEQUENCIAL",
+                "CODIGO",
+                "Codigo",
+                "CODIGOLOJA",
+                "COD",
+                "LOJA",
+                "NRLOJA");
+            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(codigo))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                id = codigo;
+            }
+
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                codigo = id;
+            }
+
+            var nome = GetSavwinStringProp(
+                el,
+                "PESNOME",
+                "NOME",
+                "Nome",
+                "DESCRICAO",
+                "Descricao",
+                "FANTASIA",
+                "NOMEFANTASIA",
+                "RAZAOSOCIAL",
+                "PESSOBRENOME") ?? string.Empty;
+            list.Add(new SavwinLojaListaItemDto
+            {
+                Id = id!.Trim(),
+                Codigo = codigo!.Trim(),
+                Nome = nome.Trim()
+            });
+        }
+
+        return list;
+    }
+
+    private static IEnumerable<JsonElement> EnumerateArrayElements(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var x in root.EnumerateArray())
+            {
+                yield return x;
+            }
+
+            yield break;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            yield break;
+        }
+
+        foreach (var p in root.EnumerateObject())
+        {
+            if (p.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var x in p.Value.EnumerateArray())
+            {
+                yield return x;
+            }
+
+            yield break;
+        }
+    }
+
+    private static string? GetSavwinStringProp(JsonElement el, params string[] candidateNames)
+    {
+        foreach (var p in el.EnumerateObject())
+        {
+            foreach (var cn in candidateNames)
+            {
+                if (p.Name.Equals(cn, StringComparison.OrdinalIgnoreCase))
+                {
+                    return JsonElementToDisplayString(p.Value);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string JsonElementToDisplayString(JsonElement v)
+    {
+        return v.ValueKind switch
+        {
+            JsonValueKind.String => v.GetString() ?? string.Empty,
+            JsonValueKind.Number => v.GetRawText(),
+            JsonValueKind.True => "1",
+            JsonValueKind.False => "0",
+            _ => string.Empty
+        };
+    }
+
+    /// <summary>
+    /// <c>POST api/APILojas/RetornaLista</c> (corpo vazio) com cache (5 min) após resposta OK — necessário para resolver <c>FILID</c> em contas a pagar.
+    /// Falhas de rede/HTTP propagam (não há fallback silencioso para código de loja do cadastro).
+    /// </summary>
+    private async Task<IReadOnlyList<SavwinLojaListaItemDto>> ObterListaLojasSavwinComCacheAsync(
+        GestaoCliente cliente,
+        CancellationToken cancellationToken)
+    {
+        var key = $"savwin:RetornaLista:{cliente.Id}";
+        if (_memoryCache.TryGetValue(key, out IReadOnlyList<SavwinLojaListaItemDto>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        var list = await FetchListaLojasAsync(cliente, cancellationToken).ConfigureAwait(false);
+        _memoryCache.Set(key, list, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+        return list;
+    }
+
+    private static string NormalizarTokenLoja(string s)
+    {
+        var t = s.Trim();
+        if (t.Length == 0)
+        {
+            return t;
+        }
+
+        if (t.All(static c => c >= '0' && c <= '9'))
+        {
+            if (long.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
+            {
+                return n.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        return t.ToUpperInvariant();
+    }
+
+    private static bool TryMatchItemListaLoja(
+        string token,
+        IReadOnlyList<SavwinLojaListaItemDto> lista,
+        out SavwinLojaListaItemDto? item)
+    {
+        item = null;
+        var n = NormalizarTokenLoja(token);
+        if (n.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var it in lista)
+        {
+            var id = it.Id?.Trim() ?? string.Empty;
+            var cod = it.Codigo?.Trim() ?? string.Empty;
+            if (id.Length > 0 && NormalizarTokenLoja(id) == n)
+            {
+                item = it;
+                return true;
+            }
+
+            if (cod.Length > 0 && NormalizarTokenLoja(cod) == n)
+            {
+                item = it;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// <para><b>1)</b> Consome a API <c>POST APILojas/RetornaLista</c> com corpo vazio (com cache).</para>
+    /// <para><b>2)</b> Cada token do cadastro/request casa com <c>FILSEQUENTIAL</c> (Codigo) ou <c>FILID</c> (Id) do JSON.</para>
+    /// <para><b>3)</b> Devolve só os <b>Ids</b> (<c>FILID</c> no JSON da lista) separados por vírgula — valor usado em FILID/LOJAS nas outras APIs.</para>
+    /// </summary>
+    private async Task<string> ObterFilidDeRetornaListaAsync(
+        GestaoCliente cliente,
+        string? lojaIdRequest,
+        CancellationToken cancellationToken)
+    {
+        var bruto = SavwinRelatorioParametros.BuildLojasParam(cliente, lojaIdRequest);
+        var lista = await ObterListaLojasSavwinComCacheAsync(cliente, cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug(
+            "RetornaLista: {Count} loja(s); tokens cadastro/request = {Bruto}",
+            lista.Count,
+            string.IsNullOrEmpty(bruto) ? "(vazio)" : bruto);
+        if (lista.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "POST APILojas/RetornaLista não retornou nenhuma loja (corpo vazio ou JSON não reconhecido). " +
+                "Sem FILID não é possível montar ContasPagarPagasGrid.");
+        }
+
+        var partes = bruto.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (partes.Length == 0)
+        {
+            return bruto;
+        }
+
+        var sb = new StringBuilder();
+        foreach (var p in partes)
+        {
+            if (TryMatchItemListaLoja(p, lista, out var it) && it is not null && !string.IsNullOrWhiteSpace(it.Id))
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(',');
+                }
+
+                sb.Append(it.Id.Trim());
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Loja '{p}' não foi encontrada em POST APILojas/RetornaLista (cruzar FILSEQUENTIAL/cadastro com a lista) ou item sem FILID.");
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static string NormalizeStatusRecebido(string? value)

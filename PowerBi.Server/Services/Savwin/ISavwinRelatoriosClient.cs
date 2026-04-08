@@ -40,4 +40,9 @@ public interface ISavwinRelatoriosClient
         GestaoCliente cliente,
         EntradasEstoqueGridClientRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>POST APILojas/RetornaLista (corpo vazio) — <c>Id</c> para <c>FILID</c> na grid de contas a pagar; <c>Codigo</c> alinhado ao cadastro.</summary>
+    Task<IReadOnlyList<SavwinLojaListaItemDto>> FetchListaLojasAsync(
+        GestaoCliente cliente,
+        CancellationToken cancellationToken = default);
 }

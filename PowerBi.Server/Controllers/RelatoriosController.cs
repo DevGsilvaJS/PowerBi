@@ -161,8 +161,35 @@ public class RelatoriosController : ControllerBase
         }
     }
 
+    /// <summary>Lista de lojas na SavWin (<c>APILojas/RetornaLista</c>) — <c>id</c> = FILID nas grids; <c>codigo</c> para cruzar com o cadastro.</summary>
+    [HttpGet("lojas-savwin")]
+    [ProducesResponseType(typeof(IReadOnlyList<SavwinLojaListaItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<IReadOnlyList<SavwinLojaListaItemDto>>> LojasSavwin(CancellationToken cancellationToken)
+    {
+        var resolved = await ResolverClienteAsync(cancellationToken);
+        if (resolved.Unauthorized)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var list = await _savwin.FetchListaLojasAsync(resolved.Entity!, cancellationToken);
+            return Ok(list);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "LojasSavwin falhou");
+            return StatusCode(StatusCodes.Status502BadGateway, ex.Message);
+        }
+    }
+
     /// <summary>Proxy SavWin <c>ContasPagarPagasGrid</c> (contas a pagar / pagas).</summary>
     [HttpPost("contas-pagar-pagas-grid")]
+    [Consumes("application/json")]
+    [Produces("application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
@@ -176,6 +203,7 @@ public class RelatoriosController : ControllerBase
             return Unauthorized();
         }
 
+        // FILID: o cliente SavWin chama POST RetornaLista (corpo vazio), resolve Id e monta o POST da grid — ver ObterFilidDeRetornaListaAsync.
         var sw = Stopwatch.StartNew();
         try
         {

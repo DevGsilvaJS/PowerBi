@@ -19,9 +19,9 @@ import { ComparativoFinanceiroCacheDto } from '../financeiro/comparativo-finance
 import { ContasPagarPagasGridRequest } from '../financeiro/contas-pagar-pagas-grid.model';
 import {
   LojaOption,
+  combinarLojasCadastroComSavwin,
   lojaIdsParaParametroApi,
-  mensagemSelecioneApenasUmaLojaSeTodasMarcadas,
-  opcoesLojasDoCadastro
+  mensagemSelecioneApenasUmaLojaSeTodasMarcadas
 } from '../shared/lojas-filtro';
 
 @Component({
@@ -88,12 +88,10 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
     const ano = hoje.getFullYear();
     this.ano1 = ano - 1;
     this.ano2 = ano;
-    this.montarLojasDoCadastro();
-  }
-
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.length > 0 ? [this.lojas[0].id] : [];
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdsSelecionadas = this.lojas.length > 0 ? [this.lojas[0].id] : [];
+    });
   }
 
   pesquisar(): void {
@@ -146,7 +144,7 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
     const d2 = `31/12/${yMax}`;
 
     const lojaParam = lojaIdsParaParametroApi(this.lojas, this.lojaIdsSelecionadas);
-    const base: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
+    const baseReceber: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
       lojaId: lojaParam,
       duplicataEmissao1: d1,
       duplicataEmissao2: d2,
@@ -156,6 +154,18 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
       recRecebimento2: d2,
       pagamentoVenda1: null,
       pagamentoVenda2: null,
+      tipoPeriodo: '1'
+    };
+    const basePagar: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
+      lojaId: lojaParam,
+      duplicataEmissao1: null,
+      duplicataEmissao2: null,
+      parVencimento1: null,
+      parVencimento2: null,
+      recRecebimento1: null,
+      recRecebimento2: null,
+      pagamentoVenda1: d1,
+      pagamentoVenda2: d2,
       tipoPeriodo: '1'
     };
 
@@ -176,7 +186,7 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
     if (irDiretoSavWin) {
       this.ignorarSnapshotServidorNaProximaPesquisa = false;
       console.info(`[ComparativoAnualFinanceiro][${diagId}] Ignorando snapshot (após limpar dados no servidor)`);
-      this.carregarComparativoDaSavWin(diagId, t0, yMin, yMax, base, lojaParam);
+      this.carregarComparativoDaSavWin(diagId, t0, yMin, yMax, basePagar, baseReceber, lojaParam);
       return;
     }
 
@@ -191,7 +201,7 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
           return;
         }
 
-        this.carregarComparativoDaSavWin(diagId, t0, yMin, yMax, base, lojaParam);
+        this.carregarComparativoDaSavWin(diagId, t0, yMin, yMax, basePagar, baseReceber, lojaParam);
       },
       error: (err) => {
         this.carregando = false;
@@ -206,12 +216,13 @@ export class ComparativoAnualFinanceiroComponent implements OnInit {
     t0: number,
     yMin: number,
     yMax: number,
-    base: Omit<ContasPagarPagasGridRequest, 'statusRecebido'>,
+    basePagar: Omit<ContasPagarPagasGridRequest, 'statusRecebido'>,
+    baseReceber: Omit<ContasPagarPagasGridRequest, 'statusRecebido'>,
     lojaParam: string | null
   ): void {
     forkJoin({
-      pagas: this.relatorios.contasPagarPagasGrid({ ...base, statusRecebido: 'BAIXADO' }),
-      recebidas: this.relatorios.contasReceberRecebidasGrid({ ...base, statusRecebido: 'BAIXADO' })
+      pagas: this.relatorios.contasPagarPagasGrid({ ...basePagar, statusRecebido: 'BAIXADO' }),
+      recebidas: this.relatorios.contasReceberRecebidasGrid({ ...baseReceber, statusRecebido: 'BAIXADO' })
     }).subscribe({
       next: ({ pagas, recebidas }) => {
         const tAfterHttp = performance.now();

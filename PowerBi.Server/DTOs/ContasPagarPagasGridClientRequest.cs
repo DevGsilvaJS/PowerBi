@@ -1,9 +1,17 @@
 namespace PowerBi.Server.DTOs;
 
 /// <summary>Proxy <c>APIRelatoriosCR/ContasPagarPagasGrid</c> (SavWin).</summary>
+/// <remarks>
+/// Contrato típico (JSON enviado à SavWin): <c>FILID</c>, <c>STATUSRECEBIDO</c>,
+/// <c>DUPEMISSAO1/2</c> e demais filtros opcionais nulos, <c>PAGAMENTOVENDA1/2</c> em dd/MM/yyyy quando o período for por pagamento,
+/// <c>TIPOPERIODO</c> (ex.: <c>1</c>).
+/// </remarks>
 public sealed class ContasPagarPagasGridClientRequest
 {
-    /// <summary>Filtra por loja; vazio = todas do cadastro (FILID como lista separada por vírgula).</summary>
+    /// <summary>
+    /// Código(s) ou id(s) de loja (vírgula); vazio = cadastro do cliente.
+    /// O servidor chama <c>RetornaLista</c> e envia à SavWin o <b>Id</b> interno da filial em <c>FILID</c>.
+    /// </summary>
     public string? LojaId { get; set; }
 
     /// <summary>TODOS (default), ABERTO ou BAIXADO.</summary>

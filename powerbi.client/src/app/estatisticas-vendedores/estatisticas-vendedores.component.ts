@@ -2,7 +2,11 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
 import { ProdutoPorOsItem } from '../relatorios/produto-por-os.model';
 import { RelatoriosApiService } from '../relatorios/relatorios-api.service';
-import { LojaOption, lojaIdsParaParametroApi, opcoesLojasDoCadastro } from '../shared/lojas-filtro';
+import {
+  LojaOption,
+  combinarLojasCadastroComSavwin,
+  lojaIdsParaParametroApi
+} from '../shared/lojas-filtro';
 
 export type BarMetric = 'liquido' | 'descontoPct' | 'ticket' | 'qtd';
 
@@ -429,11 +433,14 @@ export class EstatisticasVendedoresComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.montarLojasDoCadastro();
     const { inicio, fim } = this.primeiroUltimoDiaMesCorrente();
     this.dataInicial = this.toInputDate(inicio);
     this.dataFinal = this.toInputDate(fim);
-    this.pesquisar();
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.pesquisar();
+    });
   }
 
   ngOnDestroy(): void {
@@ -565,11 +572,6 @@ export class EstatisticasVendedoresComponent implements OnInit, OnDestroy {
     const inicio = new Date(y, mes, 1);
     const fim = new Date(y, mes + 1, 0);
     return { inicio, fim };
-  }
-
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
   }
 
   abrirModalMetricas(): void {

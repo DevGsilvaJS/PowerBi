@@ -1,11 +1,14 @@
-/** Corpo do proxy (camelCase). SavWin: FILID, STATUSRECEBIDO, DUPEMISSAO*, etc. */
+/** Corpo do proxy (camelCase). SavWin: FILID = id interno da filial (não o código de loja), STATUSRECEBIDO, DUPEMISSAO*, etc. */
 export interface ContasPagarPagasGridRequest {
   lojaId?: string | null;
   /** TODOS | ABERTO | BAIXADO */
   statusRecebido?: string | null;
-  /** Período de emissão da duplicata (dd/MM/yyyy) */
-  duplicataEmissao1: string;
-  duplicataEmissao2: string;
+  /**
+   * Período de emissão da duplicata (dd/MM/yyyy).
+   * Na ContasPagarPagasGrid pode ser null quando o filtro é só por {@link pagamentoVenda1}/2 (ex.: SavWin).
+   */
+  duplicataEmissao1?: string | null;
+  duplicataEmissao2?: string | null;
   parVencimento1?: string | null;
   parVencimento2?: string | null;
   recRecebimento1?: string | null;
@@ -107,14 +110,41 @@ export function normalizarLinhaContasPagarPagas(row: Record<string, unknown>): C
   return out as ContasPagarPagasGridItem;
 }
 
-export function parseRespostaContasPagarPagasGrid(raw: unknown): ContasPagarPagasGridItem[] {
+/**
+ * A SavWin pode devolver o array direto ou um objeto com a grade em uma propriedade (ex.: <code>d</code>, <code>Data</code>).
+ */
+function extrairArrayGradeContasPagar(raw: unknown): unknown[] {
   if (Array.isArray(raw)) {
-    return raw.map((r) =>
-      r && typeof r === 'object' ? normalizarLinhaContasPagarPagas(r as Record<string, unknown>) : {}
-    ) as ContasPagarPagasGridItem[];
+    return raw;
   }
-  if (raw && typeof raw === 'object') {
-    return [normalizarLinhaContasPagarPagas(raw as Record<string, unknown>)];
+  if (!raw || typeof raw !== 'object') {
+    return [];
   }
-  return [];
+  const o = raw as Record<string, unknown>;
+  const keys = Object.keys(o);
+  const prioridade = /^(data|d|resultado|registros?|rows|items|lista)$/i;
+  const kPref = keys.find((k) => prioridade.test(k.trim()) && Array.isArray(o[k]));
+  if (kPref) {
+    return o[kPref] as unknown[];
+  }
+  for (const k of keys) {
+    const v = o[k];
+    if (Array.isArray(v) && v.length > 0 && v[0] != null && typeof v[0] === 'object') {
+      return v;
+    }
+  }
+  for (const k of keys) {
+    const v = o[k];
+    if (Array.isArray(v)) {
+      return v;
+    }
+  }
+  return [raw];
+}
+
+export function parseRespostaContasPagarPagasGrid(raw: unknown): ContasPagarPagasGridItem[] {
+  const linhas = extrairArrayGradeContasPagar(raw);
+  return linhas.map((r) =>
+    r && typeof r === 'object' ? normalizarLinhaContasPagarPagas(r as Record<string, unknown>) : {}
+  ) as ContasPagarPagasGridItem[];
 }

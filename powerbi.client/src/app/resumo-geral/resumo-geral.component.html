@@ -1,16 +1,230 @@
-<div class="resumo-geral">
-  <h2 class="page-title">Resumo geral</h2>
-  <p class="page-desc">
-    Bem-vindo ao aplicativo Power BI. Use o menu lateral para acessar Faturamento, Estoque, Financeiro e demais módulos.
-  </p>
-  <div class="cards">
-    <div class="card">
-      <span class="card-label">Status</span>
-      <span class="card-value">Conectado</span>
-    </div>
-    <div class="card card-accent">
-      <span class="card-label">Próximo passo</span>
-      <span class="card-value">Integrar relatórios</span>
-    </div>
+<div class="resumo-geral comparativo-anual">
+  <h2 class="page-title page-title--center">Resumo geral</h2>
+
+  <div class="filtros-wrap">
+    <form class="filtros" (ngSubmit)="pesquisar()" novalidate>
+      <div class="filtros-row">
+        <label class="filtro-field filtro-field--loja">
+          <span class="filtro-label">Lojas</span>
+          <app-lojas-multi-dropdown
+            [lojas]="lojas"
+            [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+            [inputErro]="!!periodoErro"
+          />
+        </label>
+        <label class="filtro-field filtro-field--data">
+          <span class="filtro-label">Data inicial</span>
+          <input
+            type="date"
+            name="dataInicial"
+            [(ngModel)]="dataInicial"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            title="Início do período (inclusivo)"
+          />
+        </label>
+        <label class="filtro-field filtro-field--data">
+          <span class="filtro-label">Data final</span>
+          <input
+            type="date"
+            name="dataFinal"
+            [(ngModel)]="dataFinal"
+            class="filtro-input"
+            [class.filtro-input--erro]="periodoErro"
+            title="Fim do período (inclusivo)"
+          />
+        </label>
+        <div class="filtros-acoes">
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
+            {{ carregando ? 'Carregando…' : 'Pesquisar' }}
+          </button>
+        </div>
+      </div>
+      <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+      <p *ngIf="apiErro && !periodoErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+    </form>
   </div>
+
+  <section class="painel-fr" aria-labelledby="fr-title">
+    <h3 id="fr-title" class="painel-fr__title painel-fr__title--center">Faturamento, recebimentos, pagamentos e resultado</h3>
+
+    <ng-container *ngIf="jaPesquisou && carregandoSerieSavWin">
+      <p class="painel-fr__loading painel-fr__loading--center">Consultando SavWin (contas a pagar e a receber)…</p>
+    </ng-container>
+
+    <ng-container *ngIf="jaPesquisou && !carregandoSerieSavWin && !apiErro && !periodoErro">
+      <p class="painel-fr__meta painel-fr__meta--center" *ngIf="periodoLabel">
+        Período: <strong>{{ periodoLabel }}</strong>
+      </p>
+
+      <div
+        *ngIf="!carregandoSerieSavWin && temDadosGrafico"
+        class="fr-kpis fr-kpis--center"
+        role="group"
+        aria-label="KPIs do período"
+      >
+        <article class="fr-kpi fr-kpi--anim" [style.--fr-kpi-delay]="'0ms'">
+          <span class="fr-kpi__label">Faturamento do período</span>
+          <span class="fr-kpi__value">{{ formatMoeda(displayKpi.faturado) }}</span>
+          <span class="fr-kpi__hint">Soma por mês de emissão (a receber)</span>
+        </article>
+        <article class="fr-kpi fr-kpi--anim" [style.--fr-kpi-delay]="'60ms'">
+          <span class="fr-kpi__label">Recebido do período</span>
+          <span class="fr-kpi__value fr-kpi__value--rec">{{ formatMoeda(displayKpi.recebido) }}</span>
+          <span class="fr-kpi__hint">Por data de recebimento</span>
+        </article>
+        <article class="fr-kpi fr-kpi--anim" [style.--fr-kpi-delay]="'120ms'">
+          <span class="fr-kpi__label">Contas pagas do período</span>
+          <span class="fr-kpi__value fr-kpi__value--pag">{{ formatMoeda(displayKpi.pagas) }}</span>
+          <span class="fr-kpi__hint">Por data de pagamento</span>
+        </article>
+        <article
+          class="fr-kpi fr-kpi--resultado fr-kpi--anim"
+          [class.fr-kpi--resultado-neg]="totalResultado < 0"
+          [style.--fr-kpi-delay]="'180ms'"
+        >
+          <span class="fr-kpi__label">Resultado</span>
+          <span class="fr-kpi__value">{{ formatMoeda(displayKpi.resultado) }}</span>
+          <span class="fr-kpi__hint">Recebido − contas pagas</span>
+        </article>
+      </div>
+
+      <div *ngIf="!carregandoSerieSavWin && temDadosGrafico" class="fr-chart-block fr-chart-block--center">
+        <h4 class="fr-chart__subtitle">Séries mensais no período</h4>
+        <div class="fr-legend fr-legend--center" role="list">
+          <span class="fr-legend__item fr-legend__item--fat" role="listitem">
+            <span class="swatch" aria-hidden="true"></span>
+            Faturamento
+          </span>
+          <span class="fr-legend__item fr-legend__item--rec" role="listitem">
+            <span class="swatch" aria-hidden="true"></span>
+            Recebimento
+          </span>
+          <span class="fr-legend__item fr-legend__item--pag" role="listitem">
+            <span class="swatch" aria-hidden="true"></span>
+            Pagamentos
+          </span>
+          <span class="fr-legend__item fr-legend__item--res" role="listitem">
+            <span class="swatch swatch--dash" aria-hidden="true"></span>
+            Resultado
+          </span>
+        </div>
+
+        <div class="fr-chart-svg-wrap" [attr.data-anim]="chartAnimTick">
+          <svg
+            class="fr-chart-svg"
+            [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            [attr.aria-label]="'Séries mensais — ' + periodoLabel"
+          >
+            <title>Fluxo mensal — {{ periodoLabel }}</title>
+            <line
+              [attr.x1]="padL"
+              [attr.y1]="chartH - padB"
+              [attr.x2]="chartW - padR"
+              [attr.y2]="chartH - padB"
+              class="fr-axis"
+            />
+            <line
+              *ngIf="yLinhaZero !== null"
+              [attr.x1]="padL"
+              [attr.y1]="yLinhaZero"
+              [attr.x2]="chartW - padR"
+              [attr.y2]="yLinhaZero"
+              class="fr-axis fr-axis--zero"
+            />
+            <g *ngFor="let y of tickYs(); let ti = index">
+              <line
+                [attr.x1]="padL"
+                [attr.y1]="y"
+                [attr.x2]="chartW - padR"
+                [attr.y2]="y"
+                class="fr-grid"
+              />
+              <text [attr.x]="padL - 8" [attr.y]="y + 4" text-anchor="end" class="fr-tick">
+                {{ formatMoedaCurta(tickValor(ti)) }}
+              </text>
+            </g>
+            <polyline
+              *ngIf="pontos.length > 1"
+              [attr.points]="polylinePontos('faturado')"
+              fill="none"
+              class="fr-line fr-line--fat fr-line--draw"
+            />
+            <polyline
+              *ngIf="pontos.length > 1"
+              [attr.points]="polylinePontos('recebido')"
+              fill="none"
+              class="fr-line fr-line--rec fr-line--draw"
+            />
+            <polyline
+              *ngIf="pontos.length > 1"
+              [attr.points]="polylinePontos('pagas')"
+              fill="none"
+              class="fr-line fr-line--pag fr-line--draw"
+            />
+            <polyline
+              *ngIf="pontos.length > 1"
+              [attr.points]="polylinePontos('resultado')"
+              fill="none"
+              class="fr-line fr-line--res fr-line--draw"
+            />
+            <g *ngFor="let p of pontos; let i = index" class="fr-dots-g">
+              <circle [attr.cx]="xMes(i)" [attr.cy]="yValor(p.faturado)" r="3" class="fr-dot fr-dot--fat fr-dot--pop" />
+              <circle [attr.cx]="xMes(i)" [attr.cy]="yValor(p.recebido)" r="3" class="fr-dot fr-dot--rec fr-dot--pop" />
+              <circle [attr.cx]="xMes(i)" [attr.cy]="yValor(p.pagas)" r="3" class="fr-dot fr-dot--pag fr-dot--pop" />
+              <circle [attr.cx]="xMes(i)" [attr.cy]="yValor(p.resultado)" r="3" class="fr-dot fr-dot--res fr-dot--pop" />
+              <text [attr.x]="xMes(i)" [attr.y]="chartH - padB + 18" text-anchor="middle" class="fr-mes">
+                {{ p.label }}
+              </text>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div
+        *ngIf="narrativaResumo.length > 0 && !carregandoSerieSavWin && temDadosGrafico"
+        class="resumo-narrativa"
+        role="region"
+        aria-labelledby="resumo-narrativa-title"
+      >
+        <h3 id="resumo-narrativa-title" class="resumo-narrativa__title">Leitura do gráfico (com base nos dados carregados)</h3>
+        <p class="resumo-narrativa__intro">
+          Texto gerado automaticamente a partir dos valores do período <strong>{{ periodoLabel }}</strong> — faturamento por emissão,
+          recebimentos por data de recebimento, pagamentos por data de pagamento e resultado (recebido − pagas) mês a mês.
+        </p>
+        <div *ngFor="let sec of narrativaResumo" class="resumo-narrativa__sec">
+          <h4 class="resumo-narrativa__h">{{ sec.titulo }}</h4>
+          <p *ngFor="let par of sec.paragrafos" class="resumo-narrativa__p">{{ par }}</p>
+        </div>
+      </div>
+
+      <div
+        *ngIf="!carregandoSerieSavWin && !temDadosGrafico && !apiErro"
+        class="painel-fr__empty painel-fr__empty--center"
+      >
+        <p>Nenhum valor no período para montar o painel.</p>
+      </div>
+
+      <div
+        *ngIf="insights.length > 0 && !carregandoSerieSavWin && temDadosGrafico"
+        class="fr-insights fr-insights--center"
+        role="region"
+        aria-label="Insights"
+      >
+        <h4 class="fr-insights__title">Insights</h4>
+        <ul class="fr-insights__list">
+          <li *ngFor="let ins of insights" [ngClass]="'fr-insights__item--' + ins.tipo">{{ ins.texto }}</li>
+        </ul>
+      </div>
+    </ng-container>
+  </section>
+
+  <section class="resumo-links" aria-label="Atalhos">
+    <p class="page-desc page-desc--compact page-desc--center">
+      Outros módulos: use o menu lateral para <a routerLink="/app/faturamento">Faturamento</a>,
+      <a routerLink="/app/financeiro">Financeiro</a>, <a routerLink="/app/estoque">Estoque</a> e demais relatórios.
+    </p>
+  </section>
 </div>

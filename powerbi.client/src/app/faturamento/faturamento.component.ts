@@ -2,7 +2,11 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
 import { FaturamentoPainelResponse } from '../relatorios/faturamento-painel.model';
 import { RelatoriosApiService } from '../relatorios/relatorios-api.service';
-import { LojaOption, lojaIdsParaParametroApi, opcoesLojasDoCadastro } from '../shared/lojas-filtro';
+import {
+  LojaOption,
+  combinarLojasCadastroComSavwin,
+  lojaIdsParaParametroApi
+} from '../shared/lojas-filtro';
 
 export type FaturamentoViewMode = 'valor' | 'percentual' | 'grafico';
 
@@ -231,13 +235,11 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     const hoje = new Date();
     this.dataInicial = this.toInputDate(hoje);
     this.dataFinal = this.toInputDate(hoje);
-    this.montarLojasDoCadastro();
-    this.carregarDadosKpi();
-  }
-
-  montarLojasDoCadastro(): void {
-    this.lojas = opcoesLojasDoCadastro(this.auth.getLojasCadastro());
-    this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+    this.relatorios.getLojasSavwin().subscribe((items) => {
+      this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
+      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.carregarDadosKpi();
+    });
   }
 
   pesquisar(): void {
