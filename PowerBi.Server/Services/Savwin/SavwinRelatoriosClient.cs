@@ -332,7 +332,8 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         HttpResponseMessage response;
         try
         {
-            response = await http.SendAsync(httpRequest, cancellationToken);
+            // Evita bufferizar o corpo inteiro em SendAsync (respostas muito grandes → OOM).
+            response = await http.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -340,39 +341,119 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             throw new InvalidOperationException("Falha ao contatar a API externa.", ex);
         }
 
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        using (response)
         {
-            _logger.LogWarning("Savwin ProdutosCadastradosGrid HTTP {Status}: {Body}", response.StatusCode, body);
-            throw new InvalidOperationException($"Savwin HTTP {(int)response.StatusCode}");
+            if (!response.IsSuccessStatusCode)
+            {
+                var errSnippet = await ReadHttpContentSnippetAsync(response.Content, 4096, cancellationToken);
+                _logger.LogWarning("Savwin ProdutosCadastradosGrid HTTP {Status}: {Body}", response.StatusCode, errSnippet);
+                throw new InvalidOperationException($"Savwin HTTP {(int)response.StatusCode}");
+            }
+
+            try
+            {
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                return await DeserializeProdutosCadastradosGridFromStreamAsync(stream, cancellationToken);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "JSON inválido Savwin ProdutosCadastradosGrid (stream)");
+                throw new InvalidOperationException("Resposta inválida da API externa.", ex);
+            }
         }
+    }
 
-        try
+    /// <summary>
+    /// Desserializa resposta JSON (array ou um objeto) sem <see cref="ReadAsStringAsync"/> nem
+    /// <see cref="JsonDocument.Parse(string)"/> no corpo inteiro; arrays usam
+    /// <see cref="JsonSerializer.DeserializeAsyncEnumerable{TValue}"/> para reduzir pico de memória.
+    /// </summary>
+    private static async Task<IReadOnlyList<ProdutosCadastradosGridItem>> DeserializeProdutosCadastradosGridFromStreamAsync(
+        Stream stream,
+        CancellationToken cancellationToken)
+    {
+        var first = await ReadFirstNonWhitespaceByteAsync(stream, cancellationToken);
+        if (first is null)
         {
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            if (root.ValueKind == JsonValueKind.Array)
-            {
-                var list = JsonSerializer.Deserialize<List<ProdutosCadastradosGridItem>>(body, options);
-                return list ?? (IReadOnlyList<ProdutosCadastradosGridItem>)Array.Empty<ProdutosCadastradosGridItem>();
-            }
-
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                var one = JsonSerializer.Deserialize<ProdutosCadastradosGridItem>(body, options);
-                return one is null
-                    ? Array.Empty<ProdutosCadastradosGridItem>()
-                    : new[] { one };
-            }
-
             return Array.Empty<ProdutosCadastradosGridItem>();
         }
-        catch (JsonException ex)
+
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        await using var replay = new PrependByteStream(first.Value, stream);
+
+        if (first.Value == (byte)'[')
         {
-            _logger.LogError(ex, "JSON inválido Savwin ProdutosCadastradosGrid: {Body}", body);
-            throw new InvalidOperationException("Resposta inválida da API externa.", ex);
+            var list = new List<ProdutosCadastradosGridItem>(capacity: 8192);
+            await foreach (
+                var item in JsonSerializer.DeserializeAsyncEnumerable<ProdutosCadastradosGridItem>(
+                    replay,
+                    options,
+                    cancellationToken))
+            {
+                if (item is not null)
+                {
+                    list.Add(item);
+                }
+            }
+
+            return list;
         }
+
+        if (first.Value == (byte)'{')
+        {
+            var one = await JsonSerializer.DeserializeAsync<ProdutosCadastradosGridItem>(replay, options, cancellationToken);
+            return one is null
+                ? Array.Empty<ProdutosCadastradosGridItem>()
+                : new[] { one };
+        }
+
+        throw new JsonException($"Token JSON inicial inesperado (0x{first.Value:X2}).");
+    }
+
+    private static async Task<byte?> ReadFirstNonWhitespaceByteAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[1];
+        while (true)
+        {
+            var n = await stream.ReadAsync(buffer.AsMemory(0, 1), cancellationToken).ConfigureAwait(false);
+            if (n == 0)
+            {
+                return null;
+            }
+
+            var b = buffer[0];
+            if (b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            {
+                continue;
+            }
+
+            return b;
+        }
+    }
+
+    private static async Task<string> ReadHttpContentSnippetAsync(
+        HttpContent content,
+        int maxBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var s = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var ms = new MemoryStream();
+        var buffer = new byte[4096];
+        var total = 0;
+        while (total < maxBytes)
+        {
+            var toRead = Math.Min(buffer.Length, maxBytes - total);
+            var n = await s.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken).ConfigureAwait(false);
+            if (n == 0)
+            {
+                break;
+            }
+
+            await ms.WriteAsync(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
+            total += n;
+        }
+
+        return Encoding.UTF8.GetString(ms.ToArray());
     }
 
     /// <inheritdoc />
