@@ -12,13 +12,18 @@ namespace PowerBi.Server.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_comparativo_financeiro_snapshot_pagar_gestaoclientes_gestao~",
-                table: "comparativo_financeiro_snapshot_pagar");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_comparativo_financeiro_snapshot_receber_gestaoclientes_gest~",
-                table: "comparativo_financeiro_snapshot_receber");
+            // Nomes reais vêm de 20260407233000 (fk_cmp_fin_*) ou do reparo SQL; não usar FK_*~ gerado por modelos antigos.
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE comparativo_financeiro_snapshot_pagar
+                    DROP CONSTRAINT IF EXISTS fk_cmp_fin_pagar_gestao_cliente;
+                ALTER TABLE comparativo_financeiro_snapshot_pagar
+                    DROP CONSTRAINT IF EXISTS "FK_comparativo_financeiro_snapshot_pagar_gestaoclientes_gestao~";
+                ALTER TABLE comparativo_financeiro_snapshot_receber
+                    DROP CONSTRAINT IF EXISTS fk_cmp_fin_receber_gestao_cliente;
+                ALTER TABLE comparativo_financeiro_snapshot_receber
+                    DROP CONSTRAINT IF EXISTS "FK_comparativo_financeiro_snapshot_receber_gestaoclientes_gest~";
+                """);
 
             migrationBuilder.CreateTable(
                 name: "inadimplencia_financeira_snapshot",
@@ -82,7 +87,7 @@ namespace PowerBi.Server.Data.Migrations
                 name: "inadimplencia_financeira_snapshot");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_comparativo_financeiro_snapshot_pagar_gestaoclientes_gestao~",
+                name: "fk_cmp_fin_pagar_gestao_cliente",
                 table: "comparativo_financeiro_snapshot_pagar",
                 column: "gestao_cliente_id",
                 principalTable: "gestaoclientes",
@@ -90,7 +95,7 @@ namespace PowerBi.Server.Data.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_comparativo_financeiro_snapshot_receber_gestaoclientes_gest~",
+                name: "fk_cmp_fin_receber_gestao_cliente",
                 table: "comparativo_financeiro_snapshot_receber",
                 column: "gestao_cliente_id",
                 principalTable: "gestaoclientes",
