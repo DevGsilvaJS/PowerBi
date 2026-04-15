@@ -1,4 +1,8 @@
-/** Corpo do proxy (camelCase). SavWin: FILID = id interno da filial (não o código de loja), STATUSRECEBIDO, DUPEMISSAO*, etc. */
+/**
+ * Corpo do proxy (camelCase). O servidor resolve loja via RetornaLista e envia à SavWin:
+ * contas a pagar → FILID = id interno; contas a receber → FILID = código da loja.
+ * Demais chaves: STATUSRECEBIDO, DUPEMISSAO*, RECRECEBIMENTO*, PAGAMENTOVENDA*, TIPOPERIODO, etc.
+ */
 export interface ContasPagarPagasGridRequest {
   lojaId?: string | null;
   /** TODOS | ABERTO | BAIXADO */

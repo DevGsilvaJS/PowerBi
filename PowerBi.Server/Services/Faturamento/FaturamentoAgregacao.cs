@@ -18,7 +18,8 @@ public static class FaturamentoAgregacao
     public static FaturamentoPainelResponse Calcular(
         IReadOnlyList<ProdutoPorOsItem> rows,
         IReadOnlyList<VendaResumoFormaPagamentoItem> formasRaw,
-        IReadOnlyDictionary<string, string>? codigoParaCategoriaCadastro = null)
+        IReadOnlyDictionary<string, string>? codigoParaCategoriaCadastro,
+        IReadOnlyList<VendaFormaPagamentoResumoItemDto> vendaFormaPagamentoResumo)
     {
         var codigoMap =
             codigoParaCategoriaCadastro ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -26,6 +27,7 @@ public static class FaturamentoAgregacao
         var porTipoVendasDistintas = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var formasAgg = AgregarFormas(formasRaw);
         var totalFormas = formasAgg.Sum(x => x.Valor);
+        var descontoPorForma = AgregarDescontoPonderadoPorPlanoPagamento(rows, vendaFormaPagamentoResumo);
 
         if (rows.Count == 0)
         {
@@ -37,7 +39,8 @@ public static class FaturamentoAgregacao
                 VendasPorMaterialLinhas = new List<VendaMaterialLinhaDto>(),
                 VendasPorGrifeSubgrupos = MontarGrifeVazio(),
                 VendasPorTipoProdutoLinhas = MontarVendasPorTipoProdutoLinhas(porTipoValor, porTipoVendasDistintas),
-                VendasFamiliaProdutoCards = MontarCardsVendasPorFamiliaProdutoVazios()
+                VendasFamiliaProdutoCards = MontarCardsVendasPorFamiliaProdutoVazios(),
+                DescontoPorFormaPagamento = descontoPorForma
             };
         }
 
@@ -241,7 +244,8 @@ public static class FaturamentoAgregacao
                 somaPrecoPorVenda,
                 liquidoPorVenda,
                 faturamentoUsaLiquidoPorVenda,
-                codigoMap)
+                codigoMap),
+            DescontoPorFormaPagamento = descontoPorForma
         };
     }
 
@@ -796,6 +800,283 @@ public static class FaturamentoAgregacao
             new VendaGrifeSubgrupoDto { Titulo = "Lentes", Linhas = new List<VendaGrifeLinhaDto>() },
             new VendaGrifeSubgrupoDto { Titulo = "Serviços", Linhas = new List<VendaGrifeLinhaDto>() }
         };
+
+    /// <summary>
+    /// Desconto da venda, por O.S. + loja em Produtos por O.S.: <c>Σ(ValorBruto)</c> de cada linha (via
+    /// <see cref="ValorBrutoLinhaSavWin"/>) menos o <c>ValorLiquidoTotalVenda</c> da venda quando preenchido; se o líquido
+    /// vier <c>0</c> em todas as linhas, <c>Σ(ValorBruto) − Σ(PrecoTotal)</c> (desconto catálogo → preço final por linha).
+    /// Rateio no resumo por <c>ValorBruto / SUM(ValorBruto)</c>; depois agrega por <c>PlanoPagamento</c>.
+    /// Cruzamento resumo × produtos pela chave <see cref="ChaveDescontoVendaLojaOs"/> / <see cref="ChaveGrupoResumoPorLojaNumeroPedido"/>.
+    /// Sem match (ex.: linha sem <c>NumeroPedido</c>) usa desconto implícito <c>Σ(ValorBruto − ValorLiquido)</c> no grupo.
+    /// <para>
+    /// <strong>Quantidade de vendas:</strong> agrupa-se o resumo por loja + <c>NumeroPedido</c> (normalizado); por plano,
+    /// quantas chaves distintas; na linha TOTAL, pedidos distintos no resumo (bruto &gt; 0 no grupo).
+    /// </para>
+    /// </summary>
+    private static List<DescontoFormaPagamentoLinhaDto> AgregarDescontoPonderadoPorPlanoPagamento(
+        IReadOnlyList<ProdutoPorOsItem> produtosPorOs,
+        IReadOnlyList<VendaFormaPagamentoResumoItemDto> resumoRows)
+    {
+        var descontoPorPedido = DescontoTotalPorVendaBrutoMenosLiquidoTotal(produtosPorOs);
+        var porPlano = new Dictionary<string, (double Bruto, double Desconto, HashSet<string> ChavesPedidoDistintos)>(
+            StringComparer.OrdinalIgnoreCase);
+        var pedidosDistintosResumo = new HashSet<string>(StringComparer.Ordinal);
+
+        var grupos = resumoRows
+            .Select((row, index) => (row, index))
+            .GroupBy(x => ChaveGrupoResumoPorLojaNumeroPedido(x.row, x.index), StringComparer.Ordinal);
+
+        foreach (var g in grupos)
+        {
+            var linhas = g.Select(x => x.row).ToList();
+            var brutoPorLinha = linhas.Select(r => ParseBr(r.ValorBruto)).ToList();
+            var totalBrutoPedido = brutoPorLinha.Sum();
+            if (totalBrutoPedido < 1e-9)
+            {
+                continue;
+            }
+
+            pedidosDistintosResumo.Add(g.Key);
+
+            var descontoPedido = 0.0;
+            if (descontoPorPedido.TryGetValue(g.Key, out var dMap))
+            {
+                descontoPedido = Math.Max(0, dMap);
+            }
+            else
+            {
+                for (var i = 0; i < linhas.Count; i++)
+                {
+                    var vb = brutoPorLinha[i];
+                    var vl = ParseBr(linhas[i].ValorLiquido);
+                    descontoPedido += Math.Max(0, vb - vl);
+                }
+            }
+
+            var rateios = RatearDescontoEntreLinhas(brutoPorLinha, descontoPedido);
+            for (var i = 0; i < linhas.Count; i++)
+            {
+                var row = linhas[i];
+                var plano = row.PlanoPagamento?.Trim();
+                if (string.IsNullOrEmpty(plano))
+                {
+                    plano = row.MeioPagamento?.Trim();
+                }
+
+                if (string.IsNullOrEmpty(plano))
+                {
+                    continue;
+                }
+
+                var vb = brutoPorLinha[i];
+                var dr = rateios[i];
+                if (!porPlano.TryGetValue(plano, out var cur))
+                {
+                    cur = (0, 0, new HashSet<string>(StringComparer.Ordinal));
+                }
+
+                cur.ChavesPedidoDistintos.Add(g.Key);
+                porPlano[plano] = (cur.Bruto + vb, cur.Desconto + dr, cur.ChavesPedidoDistintos);
+            }
+        }
+
+        var list = porPlano
+            .Select(kv =>
+            {
+                var bruto = kv.Value.Bruto;
+                var desc = kv.Value.Desconto;
+                var qtd = kv.Value.ChavesPedidoDistintos.Count;
+                return new DescontoFormaPagamentoLinhaDto
+                {
+                    PlanoPagamento = kv.Key,
+                    ValorBruto = bruto,
+                    ValorDesconto = desc,
+                    QuantidadeVendas = qtd,
+                    DescontoPonderadoPercentual = bruto > 1e-9 ? desc / bruto * 100 : 0
+                };
+            })
+            .OrderByDescending(x => x.ValorBruto)
+            .ThenBy(x => x.PlanoPagamento, StringComparer.Create(CultureInfo.GetCultureInfo("pt-BR"), false))
+            .ToList();
+
+        if (list.Count > 0)
+        {
+            var tb = list.Sum(x => x.ValorBruto);
+            var td = list.Sum(x => x.ValorDesconto);
+            list.Add(new DescontoFormaPagamentoLinhaDto
+            {
+                PlanoPagamento = "TOTAL",
+                ValorBruto = tb,
+                ValorDesconto = td,
+                QuantidadeVendas = pedidosDistintosResumo.Count,
+                DescontoPonderadoPercentual = tb > 1e-9 ? td / tb * 100 : 0
+            });
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Código de loja para cruzamento: mesmo número com ou sem zeros à esquerda e com ou sem sufixo
+    /// <c>" - NOME"</c> (ex.: resumo <c>1</c> / <c>0001</c> vs produtos <c>0001 - OTICA …</c>).
+    /// </summary>
+    private static string ChaveLojaNormalizada(string? lojaOuNome)
+    {
+        if (string.IsNullOrWhiteSpace(lojaOuNome))
+        {
+            return "—";
+        }
+
+        var t = lojaOuNome.Trim();
+        var basePart = t;
+        var sepIdx = t.IndexOf(" - ", StringComparison.Ordinal);
+        if (sepIdx > 0)
+        {
+            basePart = t[..sepIdx].Trim();
+        }
+
+        var onlyDigits = new string(basePart.Where(char.IsDigit).ToArray());
+        if (onlyDigits.Length > 0)
+        {
+            var trimmed = onlyDigits.TrimStart('0');
+            return trimmed.Length == 0 ? "0" : trimmed;
+        }
+
+        return t;
+    }
+
+    /// <summary>
+    /// Chave de agrupamento no resumo: <c>Loja</c> + <c>NumeroPedido</c> (mesmo critério de <see cref="ChaveDescontoVendaLojaOs"/>).
+    /// Sem <c>NumeroPedido</c> ou pedido não normalizável: grupo isolado <c>__linha_{índice}</c> por linha.
+    /// </summary>
+    private static string ChaveGrupoResumoPorLojaNumeroPedido(VendaFormaPagamentoResumoItemDto row, int indexNoResumo)
+    {
+        var loja = ChaveLojaNormalizada(row.Loja);
+        if (string.IsNullOrWhiteSpace(row.NumeroPedido))
+        {
+            return $"{loja}{SepVenda}__linha_{indexNoResumo}";
+        }
+
+        var k = ChavePedidoIdentificador(row.NumeroPedido);
+        if (string.IsNullOrEmpty(k))
+        {
+            return $"{loja}{SepVenda}__linha_{indexNoResumo}";
+        }
+
+        return $"{loja}{SepVenda}{k}";
+    }
+
+    /// <summary>
+    /// Chave loja + O.S. (código da venda normalizado) para cruzar Produtos por O.S. com o resumo de formas de pagamento.
+    /// </summary>
+    private static string ChaveDescontoVendaLojaOs(ProdutoPorOsItem p)
+    {
+        var loja = ChaveLojaNormalizada(p.LojaNome);
+        var cv = p.CodigoDaVenda?.Trim();
+        if (string.IsNullOrEmpty(cv))
+        {
+            return $"{loja}{SepVenda}__sem_os__";
+        }
+
+        var k = ChavePedidoIdentificador(cv);
+        return string.IsNullOrEmpty(k) ? $"{loja}{SepVenda}__sem_os__" : $"{loja}{SepVenda}{k}";
+    }
+
+    /// <summary>
+    /// Desconto total da venda (O.S. + loja): diferença entre o bruto de catálogo (soma das linhas) e o líquido total da venda.
+    /// Quando <c>ValorLiquidoTotalVenda</c> não vem (só zeros), usa-se <c>Σ(ValorBruto) − Σ(preço líquido linha)</c>,
+    /// alinhado ao caso em que <c>Σ(PrecoTotal)</c> = líquido mas ainda há desconto de catálogo (ex. venda 76245).
+    /// </summary>
+    private static Dictionary<string, double> DescontoTotalPorVendaBrutoMenosLiquidoTotal(IReadOnlyList<ProdutoPorOsItem> produtosPorOs)
+    {
+        var map = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var g in produtosPorOs.GroupBy(ChaveDescontoVendaLojaOs, StringComparer.Ordinal))
+        {
+            var somaBruto = g.Sum(ValorBrutoLinhaSavWin);
+            var liquidoVenda = 0.0;
+            foreach (var p in g)
+            {
+                var liq = ParseBr(p.ValorLiquidoTotalVenda);
+                if (liq > liquidoVenda)
+                {
+                    liquidoVenda = liq;
+                }
+            }
+
+            double desconto;
+            if (liquidoVenda > 1e-9)
+            {
+                desconto = Math.Max(0, somaBruto - liquidoVenda);
+            }
+            else
+            {
+                var somaPrecoLinha = g.Sum(ValorLinhaSavWin);
+                desconto = Math.Max(0, somaBruto - somaPrecoLinha);
+            }
+
+            map[g.Key] = desconto;
+        }
+
+        return map;
+    }
+
+    /// <summary>Alinha <c>NumeroPedido</c> do resumo com <c>CodigoDaVenda</c> dos produtos (apenas dígitos, sem zeros à esquerda).</summary>
+    private static string ChavePedidoIdentificador(string? numeroOuCodigo)
+    {
+        if (string.IsNullOrWhiteSpace(numeroOuCodigo))
+        {
+            return string.Empty;
+        }
+
+        var onlyDigits = new string(numeroOuCodigo.Where(char.IsDigit).ToArray());
+        if (onlyDigits.Length == 0)
+        {
+            return numeroOuCodigo.Trim();
+        }
+
+        var trimmed = onlyDigits.TrimStart('0');
+        return trimmed.Length == 0 ? "0" : trimmed;
+    }
+
+    private static double RoundMoney(double x) =>
+        Math.Round(x, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>Última linha absorve o restante para a soma bater com <paramref name="descontoTotalVenda"/>.</summary>
+    private static List<double> RatearDescontoEntreLinhas(IReadOnlyList<double> valoresBrutoLinha, double descontoTotalVenda)
+    {
+        var n = valoresBrutoLinha.Count;
+        if (n == 0)
+        {
+            return new List<double>();
+        }
+
+        var total = valoresBrutoLinha.Sum();
+        if (total < 1e-9)
+        {
+            return Enumerable.Repeat(0.0, n).ToList();
+        }
+
+        var alvo = RoundMoney(Math.Max(0, descontoTotalVenda));
+        var result = new List<double>(n);
+        var restante = alvo;
+        for (var i = 0; i < n; i++)
+        {
+            var vb = valoresBrutoLinha[i];
+            if (i < n - 1)
+            {
+                var parte = RoundMoney(alvo * (vb / total));
+                parte = Math.Min(parte, restante);
+                result.Add(parte);
+                restante = RoundMoney(restante - parte);
+            }
+            else
+            {
+                result.Add(RoundMoney(restante));
+            }
+        }
+
+        return result;
+    }
 
     private static List<FormaPagamentoLinhaDto> AgregarFormas(IReadOnlyList<VendaResumoFormaPagamentoItem> rows)
     {

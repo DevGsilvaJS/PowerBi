@@ -523,11 +523,6 @@
   width: 100%;
 }
 
-.resumo-geral .filtro-field--data {
-  flex: 0 1 12rem;
-  min-width: 10rem;
-}
-
 /* Leitura dinâmica abaixo do gráfico */
 .resumo-narrativa {
   margin-top: 1.5rem;

@@ -40,9 +40,7 @@
           />
         </label>
         <div class="filtros-acoes">
-          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
-            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
-          </button>
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">Pesquisar</button>
         </div>
       </div>
       <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
@@ -133,7 +131,7 @@
         </div>
       </ng-container>
       <ng-template #carregandoPlano>
-        <p class="despesas-plano-carregando">Carregando…</p>
+        <div class="despesas-plano-carregando" aria-hidden="true"></div>
       </ng-template>
     </section>
 
@@ -172,7 +170,7 @@
         </div>
       </ng-container>
       <ng-template #carregandoFormaPgto>
-        <p class="despesas-plano-carregando">Carregando…</p>
+        <div class="despesas-plano-carregando" aria-hidden="true"></div>
       </ng-template>
     </section>
   </div>

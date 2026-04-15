@@ -46,7 +46,7 @@
         </label>
         <div class="filtros-acoes">
           <button type="submit" class="btn-pesquisar" [disabled]="carregando">
-            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+            Pesquisar
           </button>
         </div>
       </div>
@@ -64,8 +64,7 @@
     </h3>
 
     <p *ngIf="!jaPesquisou" class="chart-placeholder">
-      Defina loja e os dois anos e clique em <strong>Pesquisar</strong> para carregar o gráfico (API produtos
-      por O.S.).
+      Defina loja e os dois anos e clique em <strong>Pesquisar</strong> para carregar o gráfico.
     </p>
 
     <div *ngIf="jaPesquisou && !carregando && !apiErro" class="chart-body">

@@ -5,6 +5,7 @@ import { EstoqueComponent } from './estoque/estoque.component';
 import { FaturamentoComponent } from './faturamento/faturamento.component';
 import { ComparativoAnualVendasComponent } from './comparativo-anual-vendas/comparativo-anual-vendas.component';
 import { ComparativoAnualFinanceiroComponent } from './comparativo-anual-financeiro/comparativo-anual-financeiro.component';
+import { EstatisticasClienteComponent } from './estatisticas-cliente/estatisticas-cliente.component';
 import { EstatisticasVendedoresComponent } from './estatisticas-vendedores/estatisticas-vendedores.component';
 import { FinanceiroComponent } from './financeiro/financeiro.component';
 import { ResumoGeralComponent } from './resumo-geral/resumo-geral.component';
@@ -25,6 +26,7 @@ const routes: Routes = [
       { path: 'resumo-geral', component: ResumoGeralComponent },
       { path: 'faturamento', component: FaturamentoComponent },
       { path: 'estatisticas-vendedores', component: EstatisticasVendedoresComponent },
+      { path: 'estatisticas-cliente', component: EstatisticasClienteComponent },
       { path: 'comparativo-anual-vendas', component: ComparativoAnualVendasComponent },
       { path: 'comparativo-anual-financeiro', component: ComparativoAnualFinanceiroComponent },
       { path: 'estoque', component: EstoqueComponent },

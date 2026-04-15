@@ -141,4 +141,8 @@ public class ProdutoPorOsSavwinDto
 
     [JsonPropertyName("DATATROCA")]
     public string? DataTroca { get; set; }
+
+    /// <summary>Bairro do cliente / entrega quando a SavWin enviar <c>BAIRRO</c>.</summary>
+    [JsonPropertyName("BAIRRO")]
+    public string? Bairro { get; set; }
 }

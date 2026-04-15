@@ -48,4 +48,7 @@ public class ProdutoPorOsItem
     public string? DescontoPercentualDaVenda { get; set; }
     public string? IpdTipo { get; set; }
     public string? DataTroca { get; set; }
+
+    /// <summary>Bairro associado à venda (SavWin <c>BAIRRO</c>), quando disponível.</summary>
+    public string? Bairro { get; set; }
 }

@@ -17,6 +17,52 @@ public class FaturamentoPainelResponse
     /// Cards por família de produto na O.S.: soma do líquido alocado por linha (1/2/3) e soma de <c>QUANTIDADETOTAL</c> por linha na família.
     /// </summary>
     public List<FaturamentoFamiliaProdutoCardDto> VendasFamiliaProdutoCards { get; set; } = new();
+
+    /// <summary>
+    /// Desconto ponderado por plano (desconto da venda rateado por <c>ValorBruto</c> quando há vários meios no mesmo pedido).
+    /// </summary>
+    public List<DescontoFormaPagamentoLinhaDto> DescontoPorFormaPagamento { get; set; } = new();
+
+    /// <summary>Total de vendas pendentes de entrega (<c>RetornaVendasPendentesCompletas</c>) no período e lojas filtradas.</summary>
+    public int PendentesEntrega { get; set; }
+}
+
+/// <summary>Linha de <c>APIVendaFormaPagamentoResumo</c> (espelha JSON SavWin).</summary>
+public class VendaFormaPagamentoResumoItemDto
+{
+    public string? Id { get; set; }
+    public string? PlanoPagamento { get; set; }
+    public string? BandeiraCartao { get; set; }
+    public string? MeioPagamento { get; set; }
+    public string? NumeroParcelas { get; set; }
+    public string? ValorBruto { get; set; }
+    public string? ValorLiquido { get; set; }
+    public string? ValorTaxaAntecipacao { get; set; }
+    public string? PercentualTaxa { get; set; }
+    public string? Loja { get; set; }
+    public string? Vendedor { get; set; }
+    public string? NumeroPedido { get; set; }
+
+    /// <summary>Data de pagamento da parcela (quando a SavWin envia).</summary>
+    [JsonPropertyName("DATAPAGAMENTO")]
+    public string? DataPagamento { get; set; }
+}
+
+/// <summary>Uma linha agregada por <c>PlanoPagamento</c> com desconto rateado.</summary>
+public class DescontoFormaPagamentoLinhaDto
+{
+    public string PlanoPagamento { get; set; } = string.Empty;
+    /// <summary>Soma do campo <c>ValorBruto</c> do resumo SavWin por plano (não é bruto − líquido).</summary>
+    public double ValorBruto { get; set; }
+    /// <summary>Soma do desconto rateado por linha de forma de pagamento (proporcional ao bruto no pedido).</summary>
+    public double ValorDesconto { get; set; }
+    /// <summary>
+    /// Quantidade de <c>NumeroPedido</c> distintos (agrupamento no resumo SavWin) que usaram aquele plano; linha TOTAL = pedidos distintos no período.
+    /// </summary>
+    [JsonPropertyName("quantidadeVendas")]
+    public int QuantidadeVendas { get; set; }
+    /// <summary><c>SUM(ValorDesconto) / SUM(ValorBruto) × 100</c>.</summary>
+    public double DescontoPonderadoPercentual { get; set; }
 }
 
 /// <summary>Solares / receituários (armações), lentes ou serviços — por linha de produto na O.S.</summary>

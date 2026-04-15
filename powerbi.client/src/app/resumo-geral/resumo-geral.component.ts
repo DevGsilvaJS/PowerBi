@@ -170,7 +170,7 @@ export class ResumoGeralComponent implements OnInit, OnDestroy {
     /**
      * Contas a receber: emissão + rec/recebimento no período (comparativo).
      * Contas a pagar (SavWin): DUPEMISSAO null + PAGAMENTOVENDA1/2 = período pesquisado; STATUSRECEBIDO TODOS;
-     * FILID = código(s) da loja. Cliente ainda recorta por data de pagamento no intervalo (séries mensais).
+     * Loja(s) no corpo; o servidor resolve via RetornaLista (FILID na SavWin: id interno em pagar, código em receber). Recorte por datas no cliente.
      */
     const baseReceber: Omit<ContasPagarPagasGridRequest, 'statusRecebido'> = {
       lojaId: lojaParam,
@@ -211,6 +211,7 @@ export class ResumoGeralComponent implements OnInit, OnDestroy {
         this.pontos = montarSerieResumoPorIntervalo(porMesFat, porMesRec, porMesPag, mesesMeta);
         this.insights = gerarInsightsResumoKpi(this.pontos);
         this.narrativaResumo = gerarNarrativaResumoGrafico(this.pontos, (v) => this.formatMoeda(v));
+        this.apiErro = '';
         this.carregandoSerieSavWin = false;
         this.chartAnimTick++;
         this.definirAlvosEAnimarKpis();

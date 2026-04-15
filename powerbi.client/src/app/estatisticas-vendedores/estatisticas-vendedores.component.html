@@ -25,7 +25,7 @@
             [inputErro]="!!periodoErro"
           />
         </label>
-        <label class="filtro-field">
+        <label class="filtro-field filtro-field--data">
           <span class="filtro-label">Data inicial</span>
           <input
             type="date"
@@ -35,7 +35,7 @@
             [class.filtro-input--erro]="periodoErro"
           />
         </label>
-        <label class="filtro-field">
+        <label class="filtro-field filtro-field--data">
           <span class="filtro-label">Data final</span>
           <input
             type="date"
@@ -47,7 +47,7 @@
         </label>
         <div class="filtros-acoes">
           <button type="submit" class="btn-pesquisar" [disabled]="carregando">
-            {{ carregando ? 'Pesquisando…' : 'Pesquisar' }}
+            Pesquisar
           </button>
         </div>
       </div>
@@ -56,17 +56,15 @@
     </form>
   </div>
 
-  <div *ngIf="carregando" class="est-vend__loading est-vend__loading--global" role="status">
-    Carregando <strong>produtos por O.S.</strong>…
-  </div>
+  <div *ngIf="carregando" class="est-vend__loading est-vend__loading--global" role="status" aria-busy="true"></div>
 
   <p
     *ngIf="jaPesquisou && !carregando && !apiErro && linhasRanking.length === 0"
     class="est-vend__empty est-vend__empty--global"
     role="status"
   >
-    A API não retornou linhas de <strong>produtos por O.S.</strong> para este período e lojas. Ajuste datas ou lojas, ou
-    confira se o mesmo período retorna dados em <strong>Faturamento</strong>.
+    Não há linhas de <strong>produtos por O.S.</strong> para este período e lojas. Ajuste datas ou lojas, ou confira se o
+    mesmo período retorna dados em <strong>Faturamento</strong>.
   </p>
 
   <div *ngIf="!carregando && linhasRanking.length > 0" class="est-vend__data">

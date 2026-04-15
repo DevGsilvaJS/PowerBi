@@ -36,3 +36,27 @@ body {
   background: #0f172a;
   color: #e2e8f0;
 }
+
+/**
+ * Filtro "Lojas" compartilhado pelos relatórios (multi-select e select nativo).
+ * Evita largura estreita (ex.: 280px) que força reticências e leitura ruim.
+ */
+.filtro-field.filtro-field--loja {
+  flex: 6 1 25rem;
+  min-width: min(100%, 20rem);
+  max-width: min(100%, 48rem);
+}
+
+/** Datas (type=date / texto dd/mm): um pouco mais largo que o antigo ~148px. */
+.filtro-field.filtro-field--data {
+  flex: 1 1 12rem;
+  min-width: min(100%, 11rem);
+  max-width: min(100%, 16rem);
+}
+
+/** Busca textual nos relatórios (ex.: Estatísticas cliente) — evita largura de 168px. */
+.filtro-field.filtro-field--pesquisa {
+  flex: 2 1 14rem;
+  min-width: min(100%, 11rem);
+  max-width: min(100%, 22rem);
+}

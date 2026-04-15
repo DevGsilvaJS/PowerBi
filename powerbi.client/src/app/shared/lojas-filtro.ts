@@ -22,7 +22,7 @@ function normCodigoLoja(s: string): string {
 
 /**
  * Cruza o cadastro do login com a lista SavWin (por <code>codigo</code> ou pelo próprio <code>id</code>);
- * o <code>id</code> de cada opção é o identificador interno da filial (<b>FILID</b> nas APIs de contas), não o código.
+ * o <code>id</code> da opção costuma ser o identificador interno da filial (o servidor envia esse valor ou o código à SavWin conforme a grid: pagar vs receber).
  */
 export function combinarLojasCadastroComSavwin(
   cadastroCsv: string,

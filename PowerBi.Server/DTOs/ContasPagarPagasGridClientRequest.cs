@@ -10,7 +10,8 @@ public sealed class ContasPagarPagasGridClientRequest
 {
     /// <summary>
     /// Código(s) ou id(s) de loja (vírgula); vazio = cadastro do cliente.
-    /// O servidor chama <c>RetornaLista</c> e envia à SavWin o <b>Id</b> interno da filial em <c>FILID</c>.
+    /// O servidor chama <c>RetornaLista</c> e monta <c>FILID</c>: na grid de <b>contas a pagar</b> usa o <b>Id</b> interno;
+    /// na de <b>contas a receber</b> usa o <b>código</b> de loja (FILSEQUENTIAL), conforme a SavWin.
     /// </summary>
     public string? LojaId { get; set; }
 

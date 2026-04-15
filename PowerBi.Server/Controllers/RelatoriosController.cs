@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using PowerBi.Server.Data;
 using PowerBi.Server.DTOs;
 using PowerBi.Server.Entities;
+using PowerBi.Server.Services.EstatisticasCliente;
 using PowerBi.Server.Services.Faturamento;
 using PowerBi.Server.Services.Savwin;
 
@@ -32,6 +33,38 @@ public class RelatoriosController : ControllerBase
         _savwin = savwin;
         _faturamentoPainel = faturamentoPainel;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Estatísticas cliente: demonstrativo de venda por cliente + cadastro de clientes (SavWin), agregado por bairro.
+    /// </summary>
+    [HttpPost("vendas-por-bairro")]
+    [ProducesResponseType(typeof(IReadOnlyList<VendaPorBairroItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<IReadOnlyList<VendaPorBairroItemDto>>> VendasPorBairro(
+        [FromBody] ProdutosPorOsClientRequest request,
+        CancellationToken cancellationToken)
+    {
+        var resolved = await ResolverClienteAsync(cancellationToken);
+        if (resolved.Unauthorized)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var vendasTask = _savwin.FetchDemonstrativoVendaPorClienteAsync(resolved.Entity!, request, cancellationToken);
+            var clientesTask = _savwin.FetchClientesRetornaListaAsync(resolved.Entity!, cancellationToken);
+            await Task.WhenAll(vendasTask, clientesTask).ConfigureAwait(false);
+            var agg = VendasPorBairroAgregacao.Calcular(await vendasTask.ConfigureAwait(false), await clientesTask.ConfigureAwait(false));
+            return Ok(agg);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "VendasPorBairro falhou");
+            return StatusCode(StatusCodes.Status502BadGateway, ex.Message);
+        }
     }
 
     /// <summary>Proxy para ProdutosPorOS: usa ChaveWs (Bearer) e Identificador (header) do usuário logado.</summary>
@@ -161,7 +194,7 @@ public class RelatoriosController : ControllerBase
         }
     }
 
-    /// <summary>Lista de lojas na SavWin (<c>APILojas/RetornaLista</c>) — <c>id</c> = FILID nas grids; <c>codigo</c> para cruzar com o cadastro.</summary>
+    /// <summary>Lista de lojas na SavWin (<c>APILojas/RetornaLista</c>) — <c>id</c> interno e <c>codigo</c> (FILSEQUENTIAL); o proxy de grids usa um ou outro em <c>FILID</c> conforme a API.</summary>
     [HttpGet("lojas-savwin")]
     [ProducesResponseType(typeof(IReadOnlyList<SavwinLojaListaItemDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -223,7 +256,7 @@ public class RelatoriosController : ControllerBase
         }
     }
 
-    /// <summary>Proxy SavWin <c>ContasReceberRecebidasGrid</c> (contas a receber / recebidas).</summary>
+    /// <summary>Proxy SavWin <c>ContasReceberRecebidasGrid</c> — corpo como o de contas a pagar; <c>FILID</c> na SavWin é o <b>código</b> da loja (não o id interno).</summary>
     [HttpPost("contas-receber-recebidas-grid")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -238,6 +271,7 @@ public class RelatoriosController : ControllerBase
             return Unauthorized();
         }
 
+        // FILID na SavWin: código da loja (FILSEQUENTIAL), não o Id — ver ObterCodigoDeRetornaListaAsync.
         var sw = Stopwatch.StartNew();
         try
         {

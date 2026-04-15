@@ -22,6 +22,7 @@ import { environment } from '../../environments/environment';
 import { SavwinLojaItem } from '../shared/lojas-filtro';
 import { FaturamentoPainelResponse } from './faturamento-painel.model';
 import { ProdutoPorOsItem } from './produto-por-os.model';
+import { VendaPorBairroItem } from './venda-por-bairro.model';
 import { VendaResumoFormaPagamentoItem } from './venda-resumo-forma-pagamento.model';
 
 export interface ProdutosPorOsRequest {
@@ -53,13 +54,14 @@ export class RelatoriosApiService {
   private readonly urlContasReceberRecebidasGrid = `${this.base}/contas-receber-recebidas-grid`;
   private readonly urlComparativoFinanceiroCache = `${this.base}/comparativo-financeiro-cache`;
   private readonly urlLojasSavwin = `${this.base}/lojas-savwin`;
+  private readonly urlVendasPorBairro = `${this.base}/vendas-por-bairro`;
 
   private lojasSavwin$: Observable<SavwinLojaItem[]> | null = null;
 
   constructor(private readonly http: HttpClient) {}
 
   /**
-   * Lista SavWin (<code>RetornaLista</code>): <code>id</code> = FILID; <code>codigo</code> para cruzar com o cadastro.
+   * Lista SavWin (<code>RetornaLista</code>): <code>id</code> = identificador interno; <code>codigo</code> = FILSEQUENTIAL.
    * Em falha de rede, emite lista vazia (o front usa o cadastro via <code>combinarLojasCadastroComSavwin</code>).
    */
   getLojasSavwin(): Observable<SavwinLojaItem[]> {
@@ -83,6 +85,15 @@ export class RelatoriosApiService {
 
   produtosPorOs(body: ProdutosPorOsRequest): Observable<ProdutoPorOsItem[]> {
     return this.http.post<ProdutoPorOsItem[]>(this.url, {
+      dataInicial: body.dataInicial,
+      dataFinal: body.dataFinal,
+      lojaId: body.lojaId?.trim() || null
+    });
+  }
+
+  /** Demonstrativo por cliente + cadastro SavWin, agregado por bairro. */
+  vendasPorBairro(body: ProdutosPorOsRequest): Observable<VendaPorBairroItem[]> {
+    return this.http.post<VendaPorBairroItem[]>(this.urlVendasPorBairro, {
       dataInicial: body.dataInicial,
       dataFinal: body.dataFinal,
       lojaId: body.lojaId?.trim() || null

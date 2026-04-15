@@ -9,6 +9,20 @@ export interface FaturamentoPainelResponse {
   vendasPorTipoProdutoLinhas?: VendaTipoProdutoLinhaDto[];
   /** Solares / receituários / lentes / serviços — líquido por linha + O.S. distintas com a família. */
   vendasFamiliaProdutoCards?: FaturamentoFamiliaProdutoCardDto[];
+  /** Desconto médio por forma de pagamento (APIVendaFormaPagamentoResumo, por parcela). */
+  descontoPorFormaPagamento?: DescontoFormaPagamentoLinhaDto[];
+  /** Vendas pendentes de entrega (RetornaVendasPendentesCompletas) no período e lojas. */
+  pendentesEntrega?: number;
+}
+
+export interface DescontoFormaPagamentoLinhaDto {
+  planoPagamento: string;
+  /** Soma do campo ValorBruto da SavWin por plano. */
+  valorBruto: number;
+  valorDesconto: number;
+  /** Pedidos distintos por `NumeroPedido` (agrupamento do resumo) naquele plano. */
+  quantidadeVendas: number;
+  descontoPonderadoPercentual: number;
 }
 
 export interface FaturamentoFamiliaProdutoCardDto {

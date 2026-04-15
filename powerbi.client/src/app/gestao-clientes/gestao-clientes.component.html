@@ -72,7 +72,7 @@
       </table>
     </div>
     <ng-template #loadingTpl>
-      <p class="gc-muted">Carregando…</p>
+      <div class="gc-muted" aria-hidden="true"></div>
     </ng-template>
     <ng-template #emptyTpl>
       <p class="gc-muted" *ngIf="!carregandoLista">Nenhum cadastro ainda. Clique em <strong>Novo cadastro</strong>.</p>

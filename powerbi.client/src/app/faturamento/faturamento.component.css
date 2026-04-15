@@ -52,7 +52,7 @@
   flex: 1 1 auto;
   align-content: start;
   /* Uma única linha: uma coluna por card (<code>--kpi-card-count</code> vem do template). */
-  --kpi-card-count: 6;
+  --kpi-card-count: 7;
   grid-template-columns: repeat(var(--kpi-card-count), minmax(0, 1fr));
   min-width: 0;
 }
@@ -311,6 +311,116 @@
   font-variant-numeric: tabular-nums;
 }
 
+.kpi-panel__hint {
+  margin: -0.35rem 0 1rem;
+  font-size: var(--app-font-caption);
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.kpi-panel__hint .desconto-forma-formula {
+  font-size: 0.92em;
+  color: #cbd5e1;
+}
+
+.desconto-forma-explicacao {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.desconto-forma-explicacao__leigo {
+  margin: 0;
+  font-size: var(--app-font-caption);
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.desconto-forma-explicacao__leigo strong {
+  color: #e2e8f0;
+}
+
+.desconto-forma-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.desconto-forma-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 5.75rem 5.75rem 4.25rem 3.5rem;
+  gap: 0.28rem 0.35rem;
+  align-items: baseline;
+  padding: 0 0.5rem 0.25rem;
+  font-size: var(--app-font-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.desconto-forma-head__meio {
+  min-width: 0;
+}
+
+.desconto-forma-head__n {
+  text-align: right;
+}
+
+.desconto-forma-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.desconto-forma-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 5.75rem 5.75rem 4.25rem 3.5rem;
+  gap: 0.28rem 0.35rem;
+  align-items: center;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.desconto-forma-row--total {
+  font-weight: 700;
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.desconto-forma-meio {
+  font-size: var(--app-font-label);
+  color: #e2e8f0;
+  min-width: 0;
+}
+
+.desconto-forma-num {
+  font-size: var(--app-font-data);
+  font-weight: 600;
+  color: #f1f5f9;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .desconto-forma-head,
+  .desconto-forma-row {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: left;
+  }
+
+  .desconto-forma-head__n,
+  .desconto-forma-num {
+    text-align: left;
+  }
+}
+
 @media (max-width: 520px) {
   .vendas-produto-head {
     display: none;
@@ -531,7 +641,7 @@
 }
 
 .filtros {
-  max-width: 720px;
+  max-width: min(100%, 56rem);
   width: 100%;
   margin: 0;
   padding: 1rem 1.15rem;
@@ -553,14 +663,13 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+/* Largura estreita só para data etc.; lojas usam styles.css (evita 168px sobrepor o campo de lojas). */
+.filtro-field:not(.filtro-field--loja):not(.filtro-field--data) {
   min-width: 0;
   flex: 1 1 130px;
   max-width: 168px;
-}
-
-.filtro-field--loja {
-  flex: 1 1 180px;
-  max-width: 280px;
 }
 
 .filtro-label {

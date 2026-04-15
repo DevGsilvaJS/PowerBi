@@ -1,0 +1,115 @@
+<div class="est-cli-page">
+  <div class="est-cli__head">
+    <h2 class="page-title">Estatísticas cliente</h2>
+    <p class="est-cli__lead">
+      Consolida o demonstrativo de vendas por cliente com o cadastro SavWin, agrupa por <strong>bairro</strong> (campo na
+      venda ou no cliente) e exibe o ranking no mapa e na tabela.
+    </p>
+  </div>
+
+  <div class="filtros-wrap">
+    <form class="filtros est-cli__filtros" (ngSubmit)="pesquisar()" novalidate>
+      <div class="est-cli__filtros-stack">
+        <div class="filtros-row est-cli__filtros-row--loja">
+          <label class="filtro-field filtro-field--loja">
+            <span class="filtro-label">Lojas</span>
+            <app-lojas-multi-dropdown
+              [lojas]="lojas"
+              [(lojaIdsSelecionadas)]="lojaIdsSelecionadas"
+              [inputErro]="!!periodoErro"
+            />
+          </label>
+        </div>
+        <div class="filtros-row est-cli__filtros-row--params">
+          <label class="filtro-field filtro-field--data">
+            <span class="filtro-label">Data inicial</span>
+            <input
+              type="date"
+              name="dataInicial"
+              [(ngModel)]="dataInicial"
+              class="filtro-input"
+              [class.filtro-input--erro]="periodoErro"
+            />
+          </label>
+          <label class="filtro-field filtro-field--data">
+            <span class="filtro-label">Data final</span>
+            <input
+              type="date"
+              name="dataFinal"
+              [(ngModel)]="dataFinal"
+              class="filtro-input"
+              [class.filtro-input--erro]="periodoErro"
+            />
+          </label>
+          <label class="filtro-field filtro-field--pesquisa">
+            <span class="filtro-label">Pesquisar</span>
+            <input
+              type="search"
+              name="filtroBairro"
+              [(ngModel)]="filtroBairro"
+              (ngModelChange)="onFiltroBairroChange()"
+              class="filtro-input"
+              placeholder="Filtrar por bairro ou cidade…"
+              autocomplete="off"
+              [disabled]="!jaPesquisou || carregando"
+            />
+          </label>
+          <div class="filtros-acoes">
+            <button type="submit" class="btn-pesquisar" [disabled]="carregando">Pesquisar</button>
+          </div>
+        </div>
+      </div>
+      <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
+      <p *ngIf="apiErro" class="filtros-erro filtros-erro--api" role="alert">{{ apiErro }}</p>
+    </form>
+  </div>
+
+  <div *ngIf="carregando" class="est-cli__loading" role="status" aria-busy="true"></div>
+
+  <ng-container *ngIf="jaPesquisou && !carregando && !apiErro">
+    <section
+      *ngIf="temDadosParaMapa"
+      class="est-cli__map-section"
+      aria-labelledby="est-cli-map-title"
+    >
+      <h3 id="est-cli-map-title" class="est-cli__section-title">Mapa — vendas por bairro</h3>
+      <p class="est-cli__hint">
+        Círculos proporcionais ao valor líquido (maior venda = círculo maior). Clique para ver bairro, cidade e valores.
+      </p>
+      <p *ngIf="mapaUsaPosicaoAproximada" class="est-cli__hint est-cli__hint--muted">
+        Posição no mapa é <strong>aproximada</strong> para leitura visual quando a API não envia
+        <code>lat</code>/<code>lon</code>; não representa o endereço exato no terreno.
+      </p>
+      <div id="est-cli-map" class="est-cli__map" role="application" aria-label="Mapa de bairros"></div>
+    </section>
+
+    <section class="est-cli__table-section" aria-labelledby="est-cli-table-title">
+      <h3 id="est-cli-table-title" class="est-cli__section-title">Ranking por bairro</h3>
+      <div *ngIf="linhasRankingDesc.length === 0" class="est-cli__empty" role="status">
+        Nenhuma linha para exibir.
+      </div>
+      <table *ngIf="linhasRankingDesc.length > 0" class="est-cli__table">
+        <thead>
+          <tr>
+            <th scope="col">Bairro</th>
+            <th scope="col">Cidade</th>
+            <th scope="col" class="est-cli__num">Valor líquido</th>
+            <th scope="col" class="est-cli__num">Vendas (O.S. dist.)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of linhasRankingDesc">
+            <th scope="row">{{ row.bairro }}</th>
+            <td>{{ row.cidade || '—' }}</td>
+            <td class="est-cli__num">{{ formatMoeda(row.valorLiquido) }}</td>
+            <td class="est-cli__num">{{ row.qtdVendasDistintas }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </ng-container>
+
+  <p *ngIf="!jaPesquisou && !carregando" class="est-cli__placeholder" role="note">
+    Defina lojas, período e clique em <strong>Pesquisar</strong> para carregar o relatório.
+  </p>
+</div>

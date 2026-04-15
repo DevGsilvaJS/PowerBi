@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using PowerBi.Server.DTOs;
 using PowerBi.Server.Entities;
@@ -18,6 +19,9 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
     private const string SavwinProdutosPorOsUrl = "https://api.savwinweb.com.br/api/APIRelatoriosCR/ProdutosPorOS";
     private const string SavwinVendaResumoFormasPagamentoUrl =
         "http://cliapi.savwinweb.com.br/api/APIRelatoriosCR/APIVendaResumoTodasFormasPagamento";
+
+    private const string SavwinVendaFormaPagamentoResumoUrl =
+        "https://cliapi.savwinweb.com.br/api/APIRelatoriosCR/APIVendaFormaPagamentoResumo";
 
     private const string SavwinEntradasEstoqueGridUrl =
         "https://api.savwinweb.com.br/api/APIRelatoriosCR/EntradasEstoqueGrid";
@@ -33,9 +37,28 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
 
     private const string SavwinListaLojasUrl = "https://api.savwinweb.com.br/api/APILojas/RetornaLista";
 
+    private const string SavwinDemonstrativoVendaPorClienteUrl =
+        "http://cliapi.savwinweb.com.br/api/APIRelatoriosCR/APIDemonstrativoVendaPorCliente";
+
+    private const string SavwinClientesRetornaListaUrl = "https://api.savwinweb.com.br/api/APIClientes/RetornaLista";
+
+    private const string SavwinVendasPendentesCompletasUrl =
+        "http://cliapi.savwinweb.com.br/api/APIDados/RetornaVendasPendentesCompletas";
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache _memoryCache;
     private readonly ILogger<SavwinRelatoriosClient> _logger;
+
+    /// <summary>Como montar <c>FILID</c> no JSON enviado às grids de títulos (pagar vs receber diferem na SavWin).</summary>
+    private enum ContasTitulosFilidResolucao
+    {
+        /// <summary>FILID = token do request/cadastro (<see cref="SavwinRelatorioParametros.BuildLojasParam"/>).</summary>
+        ParametroDireto,
+        /// <summary>FILID = Id interno de <c>RetornaLista</c> — <c>ContasPagarPagasGrid</c>.</summary>
+        RetornaListaIdInterno,
+        /// <summary>FILID = código de loja (FILSEQUENTIAL) — <c>ContasReceberRecebidasGrid</c>.</summary>
+        RetornaListaCodigoLoja
+    }
 
     public SavwinRelatoriosClient(
         IHttpClientFactory httpClientFactory,
@@ -252,6 +275,79 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         catch (JsonException ex)
         {
             _logger.LogError(ex, "JSON inválido Savwin formas pagamento: {Body}", body);
+            throw new InvalidOperationException("Resposta inválida da API externa.", ex);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<VendaFormaPagamentoResumoItemDto>> FetchVendaFormaPagamentoResumoAsync(
+        GestaoCliente cliente,
+        ProdutosPorOsClientRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var dataIni = (request.DataInicial ?? string.Empty).Trim();
+        var dataFim = (request.DataFinal ?? string.Empty).Trim();
+        var lojas = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+
+        var payload = new Dictionary<string, string>
+        {
+            ["DATAINICIAL"] = dataIni,
+            ["DATAFINAL"] = dataFim,
+            ["LOJAS"] = lojas
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, SavwinVendaFormaPagamentoResumoUrl);
+        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
+        httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(2);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao chamar Savwin APIVendaFormaPagamentoResumo");
+            throw new InvalidOperationException("Falha ao contatar a API externa.", ex);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SavWin APIVendaFormaPagamentoResumo HTTP {Status}: {Body}", response.StatusCode, body);
+            throw new InvalidOperationException($"SavWin HTTP {(int)response.StatusCode}");
+        }
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                var list = JsonSerializer.Deserialize<List<VendaFormaPagamentoResumoItemDto>>(body, options);
+                return list ?? new List<VendaFormaPagamentoResumoItemDto>();
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                var one = JsonSerializer.Deserialize<VendaFormaPagamentoResumoItemDto>(body, options);
+                return one is null
+                    ? Array.Empty<VendaFormaPagamentoResumoItemDto>()
+                    : new[] { one };
+            }
+
+            return Array.Empty<VendaFormaPagamentoResumoItemDto>();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON inválido SavWin APIVendaFormaPagamentoResumo: {Body}", body);
             throw new InvalidOperationException("Resposta inválida da API externa.", ex);
         }
     }
@@ -474,7 +570,7 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             cliente,
             request,
             cancellationToken,
-            filidViaRetornaLista: true);
+            ContasTitulosFilidResolucao.RetornaListaIdInterno);
 
     /// <inheritdoc />
     public Task<string> FetchContasReceberRecebidasGridRawJsonAsync(
@@ -500,7 +596,8 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken)
     {
-        var payloadJson = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, filidViaRetornaLista: false).ConfigureAwait(false);
+        // Contas a receber: SavWin espera em FILID o código de loja (FILSEQUENTIAL), não o Id interno — ver ContasTitulosFilidResolucao.
+        var payloadJson = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, ContasTitulosFilidResolucao.RetornaListaCodigoLoja).ConfigureAwait(false);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
         var cacheKey = $"{cacheKeyPrefix}:{cliente.Id}:{hash}";
 
@@ -515,18 +612,26 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken,
-        bool filidViaRetornaLista)
+        ContasTitulosFilidResolucao resolucaoFilid)
     {
         string filid;
-        if (filidViaRetornaLista)
+        switch (resolucaoFilid)
         {
-            // Contas a pagar: consome RetornaLista, pega o Id (FILID no JSON) e envia em FILID — não o FILSEQUENTIAL.
-            filid = await ObterFilidDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("SavWin ContasPagarPagasGrid: RetornaLista → FILID = {Filid}", filid);
-        }
-        else
-        {
-            filid = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+            case ContasTitulosFilidResolucao.ParametroDireto:
+                filid = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+                break;
+            case ContasTitulosFilidResolucao.RetornaListaIdInterno:
+                // Contas a pagar: RetornaLista → Id interno em FILID (não o FILSEQUENTIAL).
+                filid = await ObterFilidDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("SavWin ContasTitulosGrid: RetornaLista → FILID (Id) = {Filid}", filid);
+                break;
+            case ContasTitulosFilidResolucao.RetornaListaCodigoLoja:
+                // Contas a receber: RetornaLista → código de loja (FILSEQUENTIAL) em FILID.
+                filid = await ObterCodigoDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("SavWin ContasTitulosGrid: RetornaLista → FILID (Código) = {Filid}", filid);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(resolucaoFilid), resolucaoFilid, null);
         }
         var status = NormalizeStatusRecebido(request.StatusRecebido);
         var tipoPeriodo = string.IsNullOrWhiteSpace(request.TipoPeriodo) ? "1" : request.TipoPeriodo.Trim();
@@ -559,9 +664,9 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         GestaoCliente cliente,
         ContasPagarPagasGridClientRequest request,
         CancellationToken cancellationToken,
-        bool filidViaRetornaLista)
+        ContasTitulosFilidResolucao resolucaoFilid)
     {
-        var json = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, filidViaRetornaLista).ConfigureAwait(false);
+        var json = await BuildContasTitulosGridPayloadJsonAsync(cliente, request, cancellationToken, resolucaoFilid).ConfigureAwait(false);
         return await PostContasTitulosGridComJsonAsync(savwinUrl, logName, cliente, json, cancellationToken).ConfigureAwait(false);
     }
 
@@ -572,6 +677,7 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         string json,
         CancellationToken cancellationToken)
     {
+
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, savwinUrl);
         httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
         httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
@@ -720,6 +826,344 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         return list;
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<DemonstrativoVendaPorClienteSavwinDto>> FetchDemonstrativoVendaPorClienteAsync(
+        GestaoCliente cliente,
+        ProdutosPorOsClientRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var dataInicio = SavwinRelatorioParametros.ToSavwinDate(request.DataInicial);
+        var dataFim = SavwinRelatorioParametros.ToSavwinDate(request.DataFinal);
+        var lojas = ExpandTokensLoja(cliente, request.LojaId);
+        if (lojas.Count == 0)
+        {
+            return Array.Empty<DemonstrativoVendaPorClienteSavwinDto>();
+        }
+
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var acumulado = new List<DemonstrativoVendaPorClienteSavwinDto>();
+        var http = _httpClientFactory.CreateClient();
+        http.Timeout = TimeSpan.FromMinutes(3);
+
+        foreach (var loja in lojas)
+        {
+            var payload = new Dictionary<string, string>
+            {
+                ["DATAINICIO"] = dataInicio,
+                ["DATAFIM"] = dataFim,
+                ["LOJA"] = loja
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, SavwinDemonstrativoVendaPorClienteUrl);
+            httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
+            httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
+            httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await http.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Falha ao chamar SavWin APIDemonstrativoVendaPorCliente (LOJA={Loja})", loja);
+                throw new InvalidOperationException("Falha ao contatar a API externa (Demonstrativo por cliente).", ex);
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detalhe = body.Length > 500 ? body[..500] + "…" : body;
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(detalhe)
+                        ? $"SavWin DemonstrativoVendaPorCliente HTTP {(int)response.StatusCode}."
+                        : $"SavWin DemonstrativoVendaPorCliente HTTP {(int)response.StatusCode}: {detalhe}");
+            }
+
+            acumulado.AddRange(DeserializeDemonstrativoVendaPorCliente(body, options));
+        }
+
+        _logger.LogInformation(
+            "SavWin APIDemonstrativoVendaPorCliente: {Count} linha(s) total, {Lojas} loja(s)",
+            acumulado.Count,
+            lojas.Count);
+
+        return acumulado;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ClienteRetornaListaSavwinDto>> FetchClientesRetornaListaAsync(
+        GestaoCliente cliente,
+        CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, SavwinClientesRetornaListaUrl);
+        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
+        httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
+        // Mesmo padrão de POST APILojas/RetornaLista: corpo vazio (JSON content-type).
+        httpRequest.Content = new StringContent(string.Empty, Encoding.UTF8, "application/json");
+        httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        var http = _httpClientFactory.CreateClient();
+        http.Timeout = TimeSpan.FromMinutes(3);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao chamar SavWin APIClientes/RetornaLista");
+            throw new InvalidOperationException("Falha ao contatar a API externa (cadastro de clientes).", ex);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detalhe = body.Length > 500 ? body[..500] + "…" : body;
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(detalhe)
+                    ? $"SavWin APIClientes/RetornaLista HTTP {(int)response.StatusCode}."
+                    : $"SavWin APIClientes/RetornaLista HTTP {(int)response.StatusCode}: {detalhe}");
+        }
+
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var list = DeserializeClientesRetornaLista(body, options);
+        _logger.LogInformation("SavWin APIClientes/RetornaLista: {Count} cliente(s), {Bytes} bytes", list.Count, body.Length);
+        return list;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountVendasPendentesEntregaAsync(
+        GestaoCliente cliente,
+        ProdutosPorOsClientRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var dataIni = SavwinRelatorioParametros.ToSavwinDate(request.DataInicial);
+        var dataFim = SavwinRelatorioParametros.ToSavwinDate(request.DataFinal);
+        var lojas = ExpandTokensLoja(cliente, request.LojaId);
+        if (lojas.Count == 0)
+        {
+            return 0;
+        }
+
+        IReadOnlyList<SavwinLojaListaItemDto> lista;
+        try
+        {
+            lista = await ObterListaLojasSavwinComCacheAsync(cliente, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RetornaLista indisponível ao resolver CODIGOLOJA para pendentes; usando token do filtro.");
+            lista = Array.Empty<SavwinLojaListaItemDto>();
+        }
+
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = null,
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never
+        };
+
+        var http = _httpClientFactory.CreateClient();
+        http.Timeout = TimeSpan.FromMinutes(2);
+        var total = 0;
+
+        foreach (var token in lojas)
+        {
+            var codigoLoja = ResolverCodigoLojaParaApi(token, lista);
+            var payload = new VendasPendentesCompletasSavwinPayload
+            {
+                CODIGOLOJA = codigoLoja,
+                DATAINICIAL = dataIni,
+                DATAFINAL = dataFim,
+                CPFCLIENTEPAGADOR = null,
+                CODIGOVENDA = null
+            };
+
+            var json = JsonSerializer.Serialize(payload, options);
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, SavwinVendasPendentesCompletasUrl);
+            httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cliente.ChaveWs}");
+            httpRequest.Headers.TryAddWithoutValidation("Identificador", cliente.Identificador);
+            httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await http.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Falha HTTP RetornaVendasPendentesCompletas (CODIGOLOJA={Codigo})", codigoLoja);
+                throw new InvalidOperationException("Falha ao contatar a API externa (pendentes de entrega).", ex);
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detalhe = body.Length > 500 ? body[..500] + "…" : body;
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(detalhe)
+                        ? $"SavWin RetornaVendasPendentesCompletas HTTP {(int)response.StatusCode}."
+                        : $"SavWin RetornaVendasPendentesCompletas HTTP {(int)response.StatusCode}: {detalhe}");
+            }
+
+            total += CountJsonArrayElementsRoot(body);
+        }
+
+        _logger.LogInformation(
+            "SavWin RetornaVendasPendentesCompletas: total {Count} linha(s), {Lojas} loja(s)",
+            total,
+            lojas.Count);
+
+        return total;
+    }
+
+    private static string ResolverCodigoLojaParaApi(string token, IReadOnlyList<SavwinLojaListaItemDto> lista)
+    {
+        if (TryMatchItemListaLoja(token, lista, out var item) && item is not null)
+        {
+            var cod = item.Codigo?.Trim();
+            if (!string.IsNullOrEmpty(cod))
+            {
+                return cod;
+            }
+
+            var id = item.Id?.Trim();
+            if (!string.IsNullOrEmpty(id))
+            {
+                return id;
+            }
+        }
+
+        return token.Trim();
+    }
+
+    private static int CountJsonArrayElementsRoot(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                return root.GetArrayLength();
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in root.EnumerateObject())
+                {
+                    if (p.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        return p.Value.GetArrayLength();
+                    }
+                }
+            }
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("JSON inválido em RetornaVendasPendentesCompletas.", ex);
+        }
+
+        return 0;
+    }
+
+    private sealed class VendasPendentesCompletasSavwinPayload
+    {
+        [JsonPropertyName("CODIGOLOJA")]
+        public string? CODIGOLOJA { get; set; }
+
+        [JsonPropertyName("DATAINICIAL")]
+        public string? DATAINICIAL { get; set; }
+
+        [JsonPropertyName("DATAFINAL")]
+        public string? DATAFINAL { get; set; }
+
+        [JsonPropertyName("CPFCLIENTEPAGADOR")]
+        public string? CPFCLIENTEPAGADOR { get; set; }
+
+        [JsonPropertyName("CODIGOVENDA")]
+        public string? CODIGOVENDA { get; set; }
+    }
+
+    private static List<string> ExpandTokensLoja(GestaoCliente cliente, string? lojaId)
+    {
+        var bruto = SavwinRelatorioParametros.BuildLojasParam(cliente, lojaId);
+        if (string.IsNullOrWhiteSpace(bruto))
+        {
+            return new List<string>();
+        }
+
+        return bruto
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static List<DemonstrativoVendaPorClienteSavwinDto> DeserializeDemonstrativoVendaPorCliente(
+        string body,
+        JsonSerializerOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return new List<DemonstrativoVendaPorClienteSavwinDto>();
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<DemonstrativoVendaPorClienteSavwinDto>>(body, options)
+                   ?? new List<DemonstrativoVendaPorClienteSavwinDto>();
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            var one = JsonSerializer.Deserialize<DemonstrativoVendaPorClienteSavwinDto>(body, options);
+            return one is null
+                ? new List<DemonstrativoVendaPorClienteSavwinDto>()
+                : new List<DemonstrativoVendaPorClienteSavwinDto> { one };
+        }
+
+        return new List<DemonstrativoVendaPorClienteSavwinDto>();
+    }
+
+    private static List<ClienteRetornaListaSavwinDto> DeserializeClientesRetornaLista(
+        string body,
+        JsonSerializerOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return new List<ClienteRetornaListaSavwinDto>();
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<ClienteRetornaListaSavwinDto>>(body, options)
+                   ?? new List<ClienteRetornaListaSavwinDto>();
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            var one = JsonSerializer.Deserialize<ClienteRetornaListaSavwinDto>(body, options);
+            return one is null
+                ? new List<ClienteRetornaListaSavwinDto>()
+                : new List<ClienteRetornaListaSavwinDto> { one };
+        }
+
+        return new List<ClienteRetornaListaSavwinDto>();
+    }
+
     private static List<SavwinLojaListaItemDto> ParseListaLojasSavwinJson(string body)
     {
         using var doc = JsonDocument.Parse(body);
@@ -850,10 +1294,6 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         };
     }
 
-    /// <summary>
-    /// <c>POST api/APILojas/RetornaLista</c> (corpo vazio) com cache (5 min) após resposta OK — necessário para resolver <c>FILID</c> em contas a pagar.
-    /// Falhas de rede/HTTP propagam (não há fallback silencioso para código de loja do cadastro).
-    /// </summary>
     private async Task<IReadOnlyList<SavwinLojaListaItemDto>> ObterListaLojasSavwinComCacheAsync(
         GestaoCliente cliente,
         CancellationToken cancellationToken)
@@ -965,6 +1405,56 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             {
                 throw new InvalidOperationException(
                     $"Loja '{p}' não foi encontrada em POST APILojas/RetornaLista (cruzar FILSEQUENTIAL/cadastro com a lista) ou item sem FILID.");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Igual a <see cref="ObterFilidDeRetornaListaAsync"/>, mas devolve os <b>códigos</b> de loja (<c>Codigo</c> / FILSEQUENTIAL)
+    /// para uso em <c>FILID</c> na API <c>ContasReceberRecebidasGrid</c>.
+    /// </summary>
+    private async Task<string> ObterCodigoDeRetornaListaAsync(
+        GestaoCliente cliente,
+        string? lojaIdRequest,
+        CancellationToken cancellationToken)
+    {
+        var bruto = SavwinRelatorioParametros.BuildLojasParam(cliente, lojaIdRequest);
+        var lista = await ObterListaLojasSavwinComCacheAsync(cliente, cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug(
+            "RetornaLista (código FILID): {Count} loja(s); tokens cadastro/request = {Bruto}",
+            lista.Count,
+            string.IsNullOrEmpty(bruto) ? "(vazio)" : bruto);
+        if (lista.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "POST APILojas/RetornaLista não retornou nenhuma loja (corpo vazio ou JSON não reconhecido). " +
+                "Sem código de loja não é possível montar ContasReceberRecebidasGrid.");
+        }
+
+        var partes = bruto.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (partes.Length == 0)
+        {
+            return bruto;
+        }
+
+        var sb = new StringBuilder();
+        foreach (var p in partes)
+        {
+            if (TryMatchItemListaLoja(p, lista, out var it) && it is not null && !string.IsNullOrWhiteSpace(it.Codigo))
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(',');
+                }
+
+                sb.Append(it.Codigo.Trim());
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Loja '{p}' não foi encontrada em POST APILojas/RetornaLista (cruzar FILSEQUENTIAL/cadastro com a lista) ou item sem código de loja.");
             }
         }
 

@@ -35,9 +35,7 @@
           />
         </label>
         <div class="filtros-acoes">
-          <button type="submit" class="btn-pesquisar" [disabled]="carregando">
-            {{ carregando ? 'Carregando…' : 'Pesquisar' }}
-          </button>
+          <button type="submit" class="btn-pesquisar" [disabled]="carregando">Pesquisar</button>
         </div>
       </div>
       <p *ngIf="periodoErro" class="filtros-erro" role="alert">{{ periodoErro }}</p>
@@ -47,10 +45,6 @@
 
   <section class="painel-fr" aria-labelledby="fr-title">
     <h3 id="fr-title" class="painel-fr__title painel-fr__title--center">Faturamento, recebimentos, pagamentos e resultado</h3>
-
-    <ng-container *ngIf="jaPesquisou && carregandoSerieSavWin">
-      <p class="painel-fr__loading painel-fr__loading--center">Consultando SavWin (contas a pagar e a receber)…</p>
-    </ng-container>
 
     <ng-container *ngIf="jaPesquisou && !carregandoSerieSavWin && !apiErro && !periodoErro">
       <p class="painel-fr__meta painel-fr__meta--center" *ngIf="periodoLabel">

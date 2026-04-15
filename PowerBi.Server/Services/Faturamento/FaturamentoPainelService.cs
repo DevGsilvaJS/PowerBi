@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PowerBi.Server.Data;
 using PowerBi.Server.DTOs;
+using PowerBi.Server.Entities;
 using PowerBi.Server.Services.Savwin;
 
 namespace PowerBi.Server.Services.Faturamento;
@@ -56,10 +57,14 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
 
         var produtosTask = _savwin.FetchProdutosPorOsAsync(entity, parametros, cancellationToken);
         var formasTask = _savwin.FetchVendaResumoFormasPagamentoAsync(entity, formasReq, cancellationToken);
-        await Task.WhenAll(produtosTask, formasTask);
+        var resumoFpTask = FetchVendaFormaPagamentoResumoOuVazioAsync(entity, parametros, cancellationToken);
+        var pendentesTask = CountVendasPendentesEntregaOuZeroAsync(entity, parametros, cancellationToken);
+        await Task.WhenAll(produtosTask, formasTask, resumoFpTask, pendentesTask);
 
         var produtos = await produtosTask;
         var formas = await formasTask;
+        var resumoFp = await resumoFpTask;
+        var pendentesEntrega = await pendentesTask;
 
         IReadOnlyList<ProdutosCadastradosGridItem> catalog;
         try
@@ -73,6 +78,42 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
         }
 
         var codigoMap = FaturamentoAgregacao.BuildCodigoParaCategoriaMap(catalog);
-        return FaturamentoAgregacao.Calcular(produtos, formas, codigoMap);
+        var painel = FaturamentoAgregacao.Calcular(produtos, formas, codigoMap, resumoFp);
+        painel.PendentesEntrega = pendentesEntrega;
+        return painel;
+    }
+
+    private async Task<int> CountVendasPendentesEntregaOuZeroAsync(
+        GestaoCliente entity,
+        ProdutosPorOsClientRequest parametros,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _savwin.CountVendasPendentesEntregaAsync(entity, parametros, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RetornaVendasPendentesCompletas indisponível; pendentes de entrega zerados.");
+            return 0;
+        }
+    }
+
+    private async Task<IReadOnlyList<VendaFormaPagamentoResumoItemDto>> FetchVendaFormaPagamentoResumoOuVazioAsync(
+        GestaoCliente entity,
+        ProdutosPorOsClientRequest parametros,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _savwin.FetchVendaFormaPagamentoResumoAsync(entity, parametros, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "APIVendaFormaPagamentoResumo indisponível; painel sem desconto ponderado por forma.");
+            return Array.Empty<VendaFormaPagamentoResumoItemDto>();
+        }
     }
 }

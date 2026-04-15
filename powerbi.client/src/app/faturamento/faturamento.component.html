@@ -10,7 +10,7 @@
           [inputErro]="!!periodoErro"
         />
       </label>
-      <label class="filtro-field">
+      <label class="filtro-field filtro-field--data">
         <span class="filtro-label">Data inicial</span>
         <input
           type="date"
@@ -20,7 +20,7 @@
           [class.filtro-input--erro]="periodoErro"
         />
       </label>
-      <label class="filtro-field">
+      <label class="filtro-field filtro-field--data">
         <span class="filtro-label">Data final</span>
         <input
           type="date"
@@ -119,7 +119,6 @@
 
     <section class="kpi-panel kpi-panel--pagamento" aria-labelledby="vendas-categoria-panel-title">
       <h2 id="vendas-categoria-panel-title" class="kpi-panel__title">Vendas por categoria</h2>
-      <p *ngIf="produtosCarregando" class="formas-vazio">Carregando…</p>
       <ng-container *ngIf="!produtosCarregando">
         <div class="vendas-produto-head" aria-hidden="true">
           <span class="vendas-produto-head__cat">Descrição</span>
@@ -153,6 +152,49 @@
       </div>
     </section>
 
+    <section class="kpi-panel kpi-panel--desconto-forma" aria-labelledby="desconto-forma-title">
+      <h2 id="desconto-forma-title" class="kpi-panel__title">Desconto médio por forma de pagamento</h2>
+      <div class="kpi-panel__hint desconto-forma-explicacao">
+        <p class="desconto-forma-explicacao__leigo">
+          O <strong>“Desc. %”</strong> mostra quanto, em média, você está dando de desconto em cada forma de pagamento.
+        </p>
+        <p class="desconto-forma-explicacao__leigo">
+          <strong>De onde vem o desconto da venda?</strong>
+          Pelos produtos da O.S., por loja e código da venda: soma do <code>ValorBruto</code> das linhas menos o
+          <code>ValorLiquidoTotalVenda</code> da venda (quando vier preenchido). Se o líquido total vier zerado em todas as
+          linhas, usa-se a diferença entre esse bruto e a soma dos preços finais por linha (<code>PrecoTotalProduto</code>).
+          O cruzamento com o resumo usa <code>Loja</code> + <code>NumeroPedido</code> (código de loja alinhado, ex.
+          <code>1</code> vs <code>0001 - Nome</code>).
+          Se não der para cruzar, usa-se a diferença entre valor bruto e valor líquido nas linhas do resumo daquele grupo.
+        </p>
+      </div>
+      <div *ngIf="descontoFormaPagamentoLinhas.length > 0" class="desconto-forma-table-wrap">
+        <div class="desconto-forma-head" aria-hidden="true">
+          <span class="desconto-forma-head__meio">Plano de pagamento</span>
+          <span class="desconto-forma-head__n">Valor bruto</span>
+          <span class="desconto-forma-head__n">Valor desconto</span>
+          <span class="desconto-forma-head__n">Qtd. vendas</span>
+          <span class="desconto-forma-head__n">Desc. %</span>
+        </div>
+        <ul class="desconto-forma-list">
+          <li
+            *ngFor="let d of descontoFormaPagamentoLinhas"
+            class="desconto-forma-row"
+            [class.desconto-forma-row--total]="d.planoPagamento === 'TOTAL'"
+          >
+            <span class="desconto-forma-meio">{{ d.planoPagamento }}</span>
+            <span class="desconto-forma-num">{{ formatMoeda(d.valorBruto) }}</span>
+            <span class="desconto-forma-num">{{ formatMoeda(d.valorDesconto) }}</span>
+            <span class="desconto-forma-num">{{ formatQuantidadeVendasDesconto(d.quantidadeVendas) }}</span>
+            <span class="desconto-forma-num">{{ formatDescontoPonderadoPct(d.descontoPonderadoPercentual) }}</span>
+          </li>
+        </ul>
+      </div>
+      <p *ngIf="!produtosCarregando && descontoFormaPagamentoLinhas.length === 0" class="formas-vazio">
+        Nenhum dado de desconto por forma de pagamento para o período e lojas.
+      </p>
+    </section>
+
     <section class="kpi-panel kpi-panel--material" aria-labelledby="material-panel-title">
       <h2 id="material-panel-title" class="kpi-panel__title">Vendas por Material</h2>
       <div *ngIf="vendasPorMaterialLinhas.length > 0" class="material-table-wrap">
@@ -173,7 +215,6 @@
           </li>
         </ul>
       </div>
-      <p *ngIf="produtosCarregando" class="material-vazio">Carregando…</p>
       <p *ngIf="!produtosCarregando && vendasPorMaterialLinhas.length === 0" class="material-vazio">
         Nenhum material no período e loja selecionados.
       </p>
@@ -205,7 +246,6 @@
           <p *ngIf="sg.linhas.length === 0" class="grife-card__vazio">Nenhuma venda nesta categoria.</p>
         </article>
       </div>
-      <p *ngIf="produtosCarregando" class="material-vazio">Carregando…</p>
       <p *ngIf="!produtosCarregando && vendasPorGrifeSubgrupos.length === 0" class="material-vazio">
         Nenhum dado de grife no período e loja selecionados.
       </p>

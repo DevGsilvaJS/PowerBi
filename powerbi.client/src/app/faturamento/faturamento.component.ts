@@ -74,6 +74,15 @@ export interface FormaPagamentoLinhaView {
   valorExibido: number;
 }
 
+/** Desconto médio por forma de pagamento (<code>APIVendaFormaPagamentoResumo</code>, linhas = parcelas). */
+export interface DescontoFormaPagamentoLinhaView {
+  planoPagamento: string;
+  valorBruto: number;
+  valorDesconto: number;
+  quantidadeVendas: number;
+  descontoPonderadoPercentual: number;
+}
+
 /** Linha do card “Vendas por categoria”: descrição (modalidade), valor líquido e quantidade de vendas (O.S.) distintas. */
 export interface VendaProdutoLinhaView {
   label: string;
@@ -190,6 +199,9 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
   /** Uma linha por <code>MEIO_PAGAMENTO</code> distinto (nome vindo da API). */
   formasPagamentoLinhas: FormaPagamentoLinhaView[] = [];
 
+  /** Desconto ponderado por forma (bruto − líquido / bruto), fonte SavWin resumo por parcela. */
+  descontoFormaPagamentoLinhas: DescontoFormaPagamentoLinhaView[] = [];
+
   /** Card “Vendas por categoria”: uma linha por modalidade (valores da API). */
   vendasPorProdutoLinhas: VendaProdutoLinhaView[] = linhasVendasPorProdutoZeradas();
 
@@ -214,7 +226,8 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     { id: 'cmv', title: 'CMV', toggle: 'none' },
     { id: 'descVendedor', title: 'Desconto', toggle: 'valorPercentual' },
     { id: 'ticketMedio', title: 'Ticket médio', toggle: 'none' },
-    { id: 'vendasProdutos', title: 'Quantidade', toggle: 'none' }
+    { id: 'vendasProdutos', title: 'Quantidade', toggle: 'none' },
+    { id: 'pendentesEntrega', title: 'Pendentes de entrega', toggle: 'none' }
   ];
 
   modes: Record<string, FaturamentoViewMode> = Object.fromEntries(
@@ -270,6 +283,7 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     this.animFormasToken++;
     this.formasPagamentoLinhas = [];
+    this.descontoFormaPagamentoLinhas = [];
     this.vendasPorProdutoLinhas = linhasVendasPorProdutoZeradas();
     this.vendasPorMaterialLinhas = [];
     this.vendasPorGrifeSubgrupos = [];
@@ -304,7 +318,9 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
           vendasPorMaterialLinhas: [],
           vendasPorGrifeSubgrupos: [],
           vendasPorTipoProdutoLinhas: [],
-          vendasFamiliaProdutoCards: []
+          vendasFamiliaProdutoCards: [],
+          descontoPorFormaPagamento: [],
+          pendentesEntrega: 0
         });
         this.kpiValorExibido = {};
         this.kpiPercentualExibido = {};
@@ -322,14 +338,36 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
   /** Mapeia DTO do servidor para o estado da tela (inclui campos <code>ex*</code> para animação). */
   private aplicarRespostaPainel(resp: FaturamentoPainelResponse): void {
     const z: KpiDados = { valor: 0, percentual: 0, bars: Array(7).fill(0) };
+    const pe = Number(resp.pendentesEntrega ?? 0);
+    const pendentesEntregaVal = Number.isFinite(pe) ? Math.max(0, Math.floor(pe)) : 0;
+
     this.kpiDados = {};
     for (const k of this.kpiCards) {
+      if (k.id === 'pendentesEntrega') {
+        this.kpiDados[k.id] = {
+          valor: pendentesEntregaVal,
+          percentual: 0,
+          bars: [...z.bars]
+        };
+        continue;
+      }
       const d = resp.kpiDados?.[k.id];
       this.kpiDados[k.id] = d
         ? { valor: d.valor, percentual: d.percentual, bars: d.bars?.length ? [...d.bars] : [...z.bars] }
         : { ...z, bars: [...z.bars] };
     }
     this.totalPagamentoResumo = resp.totalPagamentoResumo ?? 0;
+    this.descontoFormaPagamentoLinhas = (resp.descontoPorFormaPagamento ?? []).map((d) => {
+      const o = d as unknown as Record<string, unknown>;
+      const q = Number(o['quantidadeVendas'] ?? o['QuantidadeVendas'] ?? 0);
+      return {
+        planoPagamento: String(o['planoPagamento'] ?? o['PlanoPagamento'] ?? ''),
+        valorBruto: Number(o['valorBruto'] ?? o['ValorBruto'] ?? 0),
+        valorDesconto: Number(o['valorDesconto'] ?? o['ValorDesconto'] ?? 0),
+        quantidadeVendas: Number.isFinite(q) ? Math.max(0, Math.round(q)) : 0,
+        descontoPonderadoPercentual: Number(o['descontoPonderadoPercentual'] ?? o['DescontoPonderadoPercentual'] ?? 0)
+      };
+    });
     this.vendasPorMaterialLinhas = (resp.vendasPorMaterialLinhas ?? []).map((l) => ({
       material: l.material,
       bruto: l.bruto,
@@ -594,7 +632,7 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     }
     const v =
       id in this.kpiValorExibido ? this.kpiValorExibido[id]! : (this.kpiDados[id]?.valor ?? 0);
-    if (id === 'vendasProdutos') {
+    if (id === 'vendasProdutos' || id === 'pendentesEntrega') {
       return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v);
     }
     return new Intl.NumberFormat('pt-BR', {
@@ -623,6 +661,22 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
       style: 'currency',
       currency: 'BRL'
     }).format(v);
+  }
+
+  /** Percentual do desconto ponderado (0–100+), duas casas. */
+  formatDescontoPonderadoPct(p: number): string {
+    if (this.produtosCarregando) {
+      return '…';
+    }
+    return `${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p)} %`;
+  }
+
+  /** Pedidos distintos com o plano; na linha TOTAL, total de pedidos no resumo. */
+  formatQuantidadeVendasDesconto(n: number): string {
+    if (this.produtosCarregando) {
+      return '…';
+    }
+    return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(n);
   }
 
   formatValorFormaLinha(f: FormaPagamentoLinhaView): string {
