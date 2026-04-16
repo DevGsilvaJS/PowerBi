@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -70,6 +71,19 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+/* Domínio canônico: tráfego *.onrender.com → produção (evita duplicar SEO e cookies). */
+app.Use(async (context, next) =>
+{
+    if (context.Request.Host.Host.Contains("onrender.com", StringComparison.OrdinalIgnoreCase))
+    {
+        var newUrl = "https://powerbi.consultoriaga.com.br" + context.Request.GetEncodedPathAndQuery();
+        context.Response.Redirect(newUrl, permanent: true);
+        return;
+    }
+
+    await next();
+});
 
 if (app.Environment.IsProduction())
 {
