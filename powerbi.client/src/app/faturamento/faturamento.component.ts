@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
 import { FaturamentoPainelResponse } from '../relatorios/faturamento-painel.model';
-import { RelatoriosApiService } from '../relatorios/relatorios-api.service';
+import { ProdutosPorOsRequest, RelatoriosApiService } from '../relatorios/relatorios-api.service';
 import {
   LojaOption,
   combinarLojasCadastroComSavwin,
@@ -215,6 +215,10 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
   cardsFamiliaProduto: VendaFamiliaProdutoCardView[] = cardsFamiliaProdutoZerados();
 
   private animFormasToken = 0;
+  private animCategoriasToken = 0;
+
+  /** Enquanto a 2ª fase (cadastro SavWin) atualiza categorias e cards de família. */
+  categoriasPainelCarregando = false;
 
   /** Valores animados dos KPIs (0 → <code>kpiDados</code>), mesmo padrão das formas de pagamento. */
   kpiValorExibido: Record<string, number> = {};
@@ -242,6 +246,7 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.animFormasToken++;
+    this.animCategoriasToken++;
   }
 
   ngOnInit(): void {
@@ -280,8 +285,10 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
 
   private carregarDadosKpi(): void {
     this.produtosCarregando = true;
+    this.categoriasPainelCarregando = false;
     this.cdr.markForCheck();
     this.animFormasToken++;
+    this.animCategoriasToken++;
     this.formasPagamentoLinhas = [];
     this.descontoFormaPagamentoLinhas = [];
     this.vendasPorProdutoLinhas = linhasVendasPorProdutoZeradas();
@@ -309,6 +316,9 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
         }));
         this.produtosCarregando = false;
         this.iniciarAnimacaoValoresTela(linhasAgg, this.totalPagamentoResumo);
+        if (resp.categoriasRefinamentoPendente === true) {
+          this.dispararRefinamentoCategorias(req);
+        }
       },
       error: () => {
         this.aplicarRespostaPainel({
@@ -395,6 +405,29 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     }));
     this.vendasPorProdutoLinhas = this.mapearVendasPorProdutoDoPainel(resp);
     this.cardsFamiliaProduto = this.mapearCardsFamiliaProduto(resp);
+  }
+
+  private dispararRefinamentoCategorias(req: ProdutosPorOsRequest): void {
+    this.categoriasPainelCarregando = true;
+    this.cdr.markForCheck();
+    this.relatorios.faturamentoPainelCategorias(req).subscribe({
+      next: (resp2: FaturamentoPainelResponse) => {
+        this.aplicarCategoriasRefinadas(resp2);
+        this.categoriasPainelCarregando = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.categoriasPainelCarregando = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  /** Atualiza só “Vendas por categoria” e os quatro cards de família após <c>ProdutosCadastradosGrid</c>. */
+  private aplicarCategoriasRefinadas(resp: FaturamentoPainelResponse): void {
+    this.vendasPorProdutoLinhas = this.mapearVendasPorProdutoDoPainel(resp);
+    this.cardsFamiliaProduto = this.mapearCardsFamiliaProduto(resp);
+    this.iniciarAnimacaoSoCategoriasFamilia();
   }
 
   private mapearCardsFamiliaProduto(resp: FaturamentoPainelResponse): VendaFamiliaProdutoCardView[] {
@@ -591,6 +624,65 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
           l.exPercentual =
             u >= 1 ? l.percentual : interpolarPercentualAnimado(l.percentual * e, l.percentual);
         }
+      }
+
+      this.cdr.markForCheck();
+
+      if (u < 1) {
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
+  /** Anima só “Vendas por categoria” e os quatro cards de família (2ª fase, cadastro SavWin). */
+  private iniciarAnimacaoSoCategoriasFamilia(): void {
+    const token = ++this.animCategoriasToken;
+    this.vendasPorProdutoLinhas = this.vendasPorProdutoLinhas.map((row) => ({
+      ...row,
+      valorExibido: 0,
+      qtdVendasExibida: 0
+    }));
+    this.cardsFamiliaProduto = this.cardsFamiliaProduto.map((c) => ({
+      ...c,
+      valorExibido: 0,
+      qtdExibida: 0
+    }));
+    this.cdr.markForCheck();
+
+    const duracaoMs = 1200;
+    const inicio = performance.now();
+    const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
+
+    const tick = (now: number) => {
+      if (token !== this.animCategoriasToken) {
+        return;
+      }
+      const u = Math.min(1, (now - inicio) / duracaoMs);
+      const e = easeOutCubic(u);
+
+      for (const row of this.vendasPorProdutoLinhas) {
+        const interp = row.valorAlvo * e;
+        row.valorExibido =
+          u >= 1 ? row.valorAlvo : arredondarContagemAnimada(interp, row.valorAlvo);
+        const interpQtd = row.qtdVendasAlvo * e;
+        row.qtdVendasExibida =
+          u >= 1
+            ? row.qtdVendasAlvo
+            : row.qtdVendasAlvo <= 0
+              ? 0
+              : Math.round(arredondarContagemAnimada(interpQtd, row.qtdVendasAlvo));
+      }
+      for (const c of this.cardsFamiliaProduto) {
+        const interpV = c.valorAlvo * e;
+        c.valorExibido = u >= 1 ? c.valorAlvo : arredondarContagemAnimada(interpV, c.valorAlvo);
+        const interpQtd = c.qtdAlvo * e;
+        c.qtdExibida =
+          u >= 1
+            ? c.qtdAlvo
+            : c.qtdAlvo <= 0
+              ? 0
+              : Math.round(arredondarContagemAnimada(interpQtd, c.qtdAlvo));
       }
 
       this.cdr.markForCheck();

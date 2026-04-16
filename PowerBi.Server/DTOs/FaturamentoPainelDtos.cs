@@ -25,6 +25,12 @@ public class FaturamentoPainelResponse
 
     /// <summary>Total de vendas pendentes de entrega (<c>RetornaVendasPendentesCompletas</c>) no período e lojas filtradas.</summary>
     public int PendentesEntrega { get; set; }
+
+    /// <summary>
+    /// Quando <c>true</c>, o cliente pode chamar <c>POST .../faturamento-painel-categorias</c> com o mesmo corpo para obter
+    /// vendas por tipo e cards de família refinados com <c>ProdutosCadastradosGrid</c> (1ª fase veio sem esse catálogo).
+    /// </summary>
+    public bool CategoriasRefinamentoPendente { get; set; }
 }
 
 /// <summary>Linha de <c>APIVendaFormaPagamentoResumo</c> (espelha JSON SavWin).</summary>

@@ -167,6 +167,40 @@ public class RelatoriosController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Refinamento do painel Faturamento: categorias e cards de família com <c>ProdutosCadastradosGrid</c> (após <c>faturamento-painel</c>).
+    /// </summary>
+    [HttpPost("faturamento-painel-categorias")]
+    [ProducesResponseType(typeof(FaturamentoPainelResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<FaturamentoPainelResponse>> FaturamentoPainelCategorias(
+        [FromBody] ProdutosPorOsClientRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetGestaoClienteId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _faturamentoPainel.CompletarCategoriasPainelAsync(userId.Value, request, cancellationToken);
+            if (result is null)
+            {
+                return Unauthorized();
+            }
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "FaturamentoPainelCategorias falhou");
+            return StatusCode(StatusCodes.Status502BadGateway, ex.Message);
+        }
+    }
+
     /// <summary>Proxy SavWin <c>EntradasEstoqueGrid</c> (body: CODIGOLOJA, INICIOSEQ, FINALSEQ).</summary>
     [HttpPost("entradas-estoque-grid")]
     [ProducesResponseType(StatusCodes.Status200OK)]

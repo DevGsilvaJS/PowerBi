@@ -21,8 +21,35 @@ function normCodigoLoja(s: string): string {
 }
 
 /**
- * Cruza o cadastro do login com a lista SavWin (por <code>codigo</code> ou pelo próprio <code>id</code>);
- * o <code>id</code> da opção costuma ser o identificador interno da filial (o servidor envia esse valor ou o código à SavWin conforme a grid: pagar vs receber).
+ * Código de loja para rótulos (ex.: <code>1</code> → <code>0001</code>).
+ * Só alinha zeros quando o código é inteiramente numérico; caso contrário devolve o texto trimado.
+ */
+export function formatarCodigoLojaExibicao(codigo: string): string {
+  const t = codigo.trim();
+  if (t.length === 0) {
+    return '';
+  }
+  if (/^\d+$/.test(t)) {
+    const w = Math.max(4, t.length);
+    return t.padStart(w, '0');
+  }
+  return t;
+}
+
+function rotuloLojaCodigoENome(codigo: string, nomeFantasia: string): string {
+  const codFmt = formatarCodigoLojaExibicao(codigo);
+  const nome = nomeFantasia.trim();
+  if (!codFmt) {
+    return nome || 'Loja';
+  }
+  return nome.length > 0 ? `${codFmt} - ${nome}` : codFmt;
+}
+
+/**
+ * Cruza o cadastro do login com a lista SavWin só por <code>codigo</code> (FILSEQUENTIAL).
+ * Não cruza por <code>id</code> (FILID): o mesmo número pode ser FILID de uma filial e código de outra,
+ * o que duplicava opções no filtro (ex.: FRANQUEADORA com FILID=1 e NILO com código=1).
+ * O <code>id</code> da opção continua sendo o FILID (<code>idApi || cod</code>) para as chamadas à API.
  */
 export function combinarLojasCadastroComSavwin(
   cadastroCsv: string,
@@ -51,8 +78,7 @@ export function combinarLojasCadastroComSavwin(
       continue;
     }
     const bateCodigo = cod.length > 0 && codigosCad.has(normCodigoLoja(cod));
-    const bateIdCadastro = idApi.length > 0 && codigosCad.has(normCodigoLoja(idApi));
-    if (!bateCodigo && !bateIdCadastro) {
+    if (!bateCodigo) {
       continue;
     }
     const filialParaApi = idApi || cod;
@@ -60,7 +86,7 @@ export function combinarLojasCadastroComSavwin(
       continue;
     }
     visto.add(filialParaApi);
-    const nome = item.nome?.trim() || `Loja ${cod || idApi}`;
+    const nome = rotuloLojaCodigoENome(cod, item.nome?.trim() || '');
     out.push({ id: filialParaApi, nome });
   }
   if (out.length === 0) {
@@ -83,7 +109,10 @@ export function opcoesLojasDoCadastro(cadastroCsv: string): LojaOption[] {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  return ids.map((id) => ({ id, nome: `Loja ${id}` }));
+  return ids.map((id) => ({
+    id,
+    nome: rotuloLojaCodigoENome(id, 'Loja')
+  }));
 }
 
 /**

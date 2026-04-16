@@ -64,7 +64,7 @@ public interface ISavwinRelatoriosClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// POST APIDados/RetornaVendasPendentesCompletas — soma contagens por <c>CODIGOLOJA</c> no intervalo (dd/MM/yyyy).
+    /// POST APIDados/RetornaVendasPendentesCompletas — soma contagens por loja (campo <c>CODIGOLOJA</c> no corpo = FILID) no intervalo (dd/MM/yyyy).
     /// </summary>
     Task<int> CountVendasPendentesEntregaAsync(
         GestaoCliente cliente,

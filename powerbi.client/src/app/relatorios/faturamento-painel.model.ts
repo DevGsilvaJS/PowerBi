@@ -13,6 +13,8 @@ export interface FaturamentoPainelResponse {
   descontoPorFormaPagamento?: DescontoFormaPagamentoLinhaDto[];
   /** Vendas pendentes de entrega (RetornaVendasPendentesCompletas) no período e lojas. */
   pendentesEntrega?: number;
+  /** Se true, chamar <code>POST .../faturamento-painel-categorias</code> para refinamento com ProdutosCadastradosGrid. */
+  categoriasRefinamentoPendente?: boolean;
 }
 
 export interface DescontoFormaPagamentoLinhaDto {

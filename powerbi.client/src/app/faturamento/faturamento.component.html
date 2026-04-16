@@ -41,6 +41,9 @@
   <div class="faturamento-panels">
     <section class="kpi-panel" aria-labelledby="faturamento-panel-title">
       <h2 id="faturamento-panel-title" class="kpi-panel__title">Faturamento</h2>
+      <p *ngIf="categoriasPainelCarregando" class="faturamento-categorias-loading" role="status">
+        Ajustando categorias com o cadastro de produtos (SavWin)…
+      </p>
       <div
         class="kpi-panel__grid kpi-grid"
         [style.--kpi-card-count]="kpiCards.length"

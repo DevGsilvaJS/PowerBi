@@ -49,6 +49,7 @@ export class RelatoriosApiService {
   private readonly url = `${this.base}/produtos-por-os`;
   private readonly urlFormasPagamento = `${this.base}/venda-resumo-formas-pagamento`;
   private readonly urlFaturamentoPainel = `${this.base}/faturamento-painel`;
+  private readonly urlFaturamentoPainelCategorias = `${this.base}/faturamento-painel-categorias`;
   private readonly urlEntradasEstoqueGrid = `${this.base}/entradas-estoque-grid`;
   private readonly urlContasPagarPagasGrid = `${this.base}/contas-pagar-pagas-grid`;
   private readonly urlContasReceberRecebidasGrid = `${this.base}/contas-receber-recebidas-grid`;
@@ -77,6 +78,15 @@ export class RelatoriosApiService {
   /** KPIs, material, grife e formas já agregados no servidor. */
   faturamentoPainel(body: ProdutosPorOsRequest): Observable<FaturamentoPainelResponse> {
     return this.http.post<FaturamentoPainelResponse>(this.urlFaturamentoPainel, {
+      dataInicial: body.dataInicial,
+      dataFinal: body.dataFinal,
+      lojaId: body.lojaId?.trim() || null
+    });
+  }
+
+  /** 2ª fase: categorias + cards família com cadastro SavWin (<c>ProdutosCadastradosGrid</c>). */
+  faturamentoPainelCategorias(body: ProdutosPorOsRequest): Observable<FaturamentoPainelResponse> {
+    return this.http.post<FaturamentoPainelResponse>(this.urlFaturamentoPainelCategorias, {
       dataInicial: body.dataInicial,
       dataFinal: body.dataFinal,
       lojaId: body.lojaId?.trim() || null

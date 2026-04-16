@@ -10,4 +10,13 @@ public interface IFaturamentoPainelService
         int gestaoClienteId,
         ProdutosPorOsClientRequest parametros,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 2ª fase: aplica <c>ProdutosCadastradosGrid</c> sobre o snapshot da 1ª fase (mesmo período/lojas).
+    /// Se o snapshot expirou, refaz a carga completa em uma única rodada.
+    /// </summary>
+    Task<FaturamentoPainelResponse?> CompletarCategoriasPainelAsync(
+        int gestaoClienteId,
+        ProdutosPorOsClientRequest parametros,
+        CancellationToken cancellationToken = default);
 }

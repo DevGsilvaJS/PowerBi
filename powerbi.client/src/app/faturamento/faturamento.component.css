@@ -26,6 +26,12 @@
   min-height: 0;
 }
 
+.faturamento-categorias-loading {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.95);
+}
+
 .kpi-panel {
   flex: 1 1 auto;
   display: flex;
@@ -203,25 +209,29 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
   gap: 0.65rem 1.25rem;
 }
 
 .forma-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   padding: 0.65rem 0.85rem;
   border-radius: 0.5rem;
   background: rgba(30, 41, 59, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.1);
+  min-width: 0;
 }
 
 .forma-label {
   font-size: var(--app-font-subtitle);
   font-weight: 600;
   color: #cbd5e1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .forma-valor {
@@ -229,6 +239,29 @@
   font-weight: 700;
   color: #f1f5f9;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  text-align: right;
+  justify-self: end;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* Só “Formas de pagamento”: mesmo tamanho da tabela “Desconto médio por forma” (label + data). */
+#pagamento-panel-title ~ ul.formas-list .forma-row {
+  padding: 0.45rem 0.5rem;
+}
+
+#pagamento-panel-title ~ ul.formas-list .forma-label {
+  font-size: var(--app-font-label);
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+#pagamento-panel-title ~ ul.formas-list .forma-valor {
+  font-size: var(--app-font-data);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .forma-total {
@@ -259,6 +292,10 @@
   font-weight: 700;
   color: #eef2ff;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .formas-vazio {

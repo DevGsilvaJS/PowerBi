@@ -949,16 +949,7 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             return 0;
         }
 
-        IReadOnlyList<SavwinLojaListaItemDto> lista;
-        try
-        {
-            lista = await ObterListaLojasSavwinComCacheAsync(cliente, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "RetornaLista indisponível ao resolver CODIGOLOJA para pendentes; usando token do filtro.");
-            lista = Array.Empty<SavwinLojaListaItemDto>();
-        }
+        var lista = await ObterListaLojasSavwinComCacheAsync(cliente, cancellationToken).ConfigureAwait(false);
 
         var options = new JsonSerializerOptions
         {
@@ -972,10 +963,10 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
 
         foreach (var token in lojas)
         {
-            var codigoLoja = ResolverCodigoLojaParaApi(token, lista);
+            var idLoja = ResolverFilidObrigatorioParaRetornaVendasPendentesCompletas(token, lista);
             var payload = new VendasPendentesCompletasSavwinPayload
             {
-                CODIGOLOJA = codigoLoja,
+                CODIGOLOJA = idLoja,
                 DATAINICIAL = dataIni,
                 DATAFINAL = dataFim,
                 CPFCLIENTEPAGADOR = null,
@@ -996,7 +987,7 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Falha HTTP RetornaVendasPendentesCompletas (CODIGOLOJA={Codigo})", codigoLoja);
+                _logger.LogError(ex, "Falha HTTP RetornaVendasPendentesCompletas (FILID={Filid})", idLoja);
                 throw new InvalidOperationException("Falha ao contatar a API externa (pendentes de entrega).", ex);
             }
 
@@ -1021,24 +1012,33 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         return total;
     }
 
-    private static string ResolverCodigoLojaParaApi(string token, IReadOnlyList<SavwinLojaListaItemDto> lista)
+    /// <summary>
+    /// <c>RetornaVendasPendentesCompletas</c> exige sempre o <b>FILID</b> no JSON (<c>CODIGOLOJA</c>), obtido de <c>RetornaLista</c> — sem fallback para código ou token do filtro.
+    /// </summary>
+    private static string ResolverFilidObrigatorioParaRetornaVendasPendentesCompletas(
+        string token,
+        IReadOnlyList<SavwinLojaListaItemDto> lista)
     {
+        if (lista.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "POST APILojas/RetornaLista não retornou lojas; não é possível obter o FILID para RetornaVendasPendentesCompletas.");
+        }
+
         if (TryMatchItemListaLoja(token, lista, out var item) && item is not null)
         {
-            var cod = item.Codigo?.Trim();
-            if (!string.IsNullOrEmpty(cod))
-            {
-                return cod;
-            }
-
             var id = item.Id?.Trim();
             if (!string.IsNullOrEmpty(id))
             {
                 return id;
             }
+
+            throw new InvalidOperationException(
+                $"Loja correspondente a '{token}' em RetornaLista não possui FILID (Id); RetornaVendasPendentesCompletas exige o id da loja.");
         }
 
-        return token.Trim();
+        throw new InvalidOperationException(
+            $"Loja '{token}' não foi encontrada em POST APILojas/RetornaLista (FILID obrigatório para RetornaVendasPendentesCompletas).");
     }
 
     private static int CountJsonArrayElementsRoot(string body)
@@ -1078,6 +1078,7 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
 
     private sealed class VendasPendentesCompletasSavwinPayload
     {
+        /// <summary>FILID da loja (nome do campo legado na API SavWin).</summary>
         [JsonPropertyName("CODIGOLOJA")]
         public string? CODIGOLOJA { get; set; }
 
@@ -1340,17 +1341,22 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             return false;
         }
 
+        // Preferir FILSEQUENTIAL (Codigo): o token do cadastro/requisição é o código de loja;
+        // FILID pode coincidir numericamente com o código de outra filial.
         foreach (var it in lista)
         {
-            var id = it.Id?.Trim() ?? string.Empty;
             var cod = it.Codigo?.Trim() ?? string.Empty;
-            if (id.Length > 0 && NormalizarTokenLoja(id) == n)
+            if (cod.Length > 0 && NormalizarTokenLoja(cod) == n)
             {
                 item = it;
                 return true;
             }
+        }
 
-            if (cod.Length > 0 && NormalizarTokenLoja(cod) == n)
+        foreach (var it in lista)
+        {
+            var id = it.Id?.Trim() ?? string.Empty;
+            if (id.Length > 0 && NormalizarTokenLoja(id) == n)
             {
                 item = it;
                 return true;
