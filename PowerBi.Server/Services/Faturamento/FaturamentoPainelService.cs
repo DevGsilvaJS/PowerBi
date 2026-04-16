@@ -9,11 +9,19 @@ namespace PowerBi.Server.Services.Faturamento;
 
 /// <summary>
 /// Camada de aplicação: busca dados nas APIs SavWin e aplica regras em <see cref="FaturamentoAgregacao"/>.
-/// O painel é carregado em duas fases: dados principais (rápido) e refinamento de categorias via <c>ProdutosCadastradosGrid</c>.
+/// O painel dispara <c>ProdutosPorOS</c>, formas, resumo, pendentes e <c>ProdutosCadastradosGrid</c> em paralelo.
 /// </summary>
 public sealed class FaturamentoPainelService : IFaturamentoPainelService
 {
     private static readonly TimeSpan SnapshotTtl = TimeSpan.FromMinutes(10);
+
+    /// <summary>Body SavWin <c>ProdutosCadastradosGrid</c> (CODIGOLOJA + faixa de sequência).</summary>
+    private static readonly EntradasEstoqueGridClientRequest CatalogoProdutosCadastradosRequest = new()
+    {
+        LojaId = "1",
+        InicioSeq = "1",
+        FinalSeq = "19999999"
+    };
 
     private readonly ApplicationDbContext _db;
     private readonly ISavwinRelatoriosClient _savwin;
@@ -59,12 +67,15 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
         var formasTask = _savwin.FetchVendaResumoFormasPagamentoAsync(entity, formasReq, cancellationToken);
         var resumoFpTask = FetchVendaFormaPagamentoResumoOuVazioAsync(entity, parametros, cancellationToken);
         var pendentesTask = CountVendasPendentesEntregaOuZeroAsync(entity, parametros, cancellationToken);
-        await Task.WhenAll(produtosTask, formasTask, resumoFpTask, pendentesTask);
+        var catalogTask = FetchCatalogoProdutosParaPainelOuVazioAsync(entity, cancellationToken);
 
-        var produtos = await produtosTask;
-        var formas = await formasTask;
-        var resumoFp = await resumoFpTask;
-        var pendentesEntrega = await pendentesTask;
+        await Task.WhenAll(produtosTask, formasTask, resumoFpTask, pendentesTask, catalogTask).ConfigureAwait(false);
+
+        var produtos = await produtosTask.ConfigureAwait(false);
+        var formas = await formasTask.ConfigureAwait(false);
+        var resumoFp = await resumoFpTask.ConfigureAwait(false);
+        var pendentesEntrega = await pendentesTask.ConfigureAwait(false);
+        var catalog = await catalogTask.ConfigureAwait(false);
 
         var snapshot = new FaturamentoPainelSnapshot
         {
@@ -77,9 +88,10 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
         var cacheKey = BuildSnapshotCacheKey(gestaoClienteId, parametros);
         _cache.Set(cacheKey, snapshot, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = SnapshotTtl });
 
-        var painel = FaturamentoAgregacao.Calcular(produtos, formas, null, resumoFp);
+        var codigoMap = FaturamentoAgregacao.BuildCodigoParaCategoriaMap(catalog);
+        var painel = FaturamentoAgregacao.Calcular(produtos, formas, codigoMap, resumoFp);
         painel.PendentesEntrega = pendentesEntrega;
-        painel.CategoriasRefinamentoPendente = true;
+        painel.CategoriasRefinamentoPendente = false;
         return painel;
     }
 
@@ -102,20 +114,14 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
             _logger.LogWarning(
                 "Cache do painel faturamento ausente para refinamento de categorias (chave {Key}). Refazendo carga completa.",
                 cacheKey);
-            return await ObterPainelCompletoComCatalogoAsync(entity, parametros, cancellationToken);
+            return await ObterPainelCompletoComCatalogoAsync(entity, parametros, cancellationToken).ConfigureAwait(false);
         }
-
-        var catalogReq = new EntradasEstoqueGridClientRequest
-        {
-            LojaId = "0",
-            InicioSeq = "1",
-            FinalSeq = "99999999"
-        };
 
         IReadOnlyList<ProdutosCadastradosGridItem> catalog;
         try
         {
-            catalog = await _savwin.FetchProdutosCadastradosGridAsync(entity, catalogReq, cancellationToken)
+            catalog = await _savwin
+                .FetchProdutosCadastradosGridAsync(entity, CatalogoProdutosCadastradosRequest, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -147,40 +153,42 @@ public sealed class FaturamentoPainelService : IFaturamentoPainelService
             LojaId = parametros.LojaId
         };
 
-        var catalogReq = new EntradasEstoqueGridClientRequest
-        {
-            LojaId = "0",
-            InicioSeq = "1",
-            FinalSeq = "99999999"
-        };
-
         var produtosTask = _savwin.FetchProdutosPorOsAsync(entity, parametros, cancellationToken);
         var formasTask = _savwin.FetchVendaResumoFormasPagamentoAsync(entity, formasReq, cancellationToken);
         var resumoFpTask = FetchVendaFormaPagamentoResumoOuVazioAsync(entity, parametros, cancellationToken);
         var pendentesTask = CountVendasPendentesEntregaOuZeroAsync(entity, parametros, cancellationToken);
-        var catalogTask = _savwin.FetchProdutosCadastradosGridAsync(entity, catalogReq, cancellationToken);
-        await Task.WhenAll(produtosTask, formasTask, resumoFpTask, pendentesTask);
+        var catalogTask = FetchCatalogoProdutosParaPainelOuVazioAsync(entity, cancellationToken);
 
-        var produtos = await produtosTask;
-        var formas = await formasTask;
-        var resumoFp = await resumoFpTask;
-        var pendentesEntrega = await pendentesTask;
-        IReadOnlyList<ProdutosCadastradosGridItem> catalog;
-        try
-        {
-            catalog = await catalogTask.ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "ProdutosCadastradosGrid indisponível; vendas por categoria usarão fallback.");
-            catalog = Array.Empty<ProdutosCadastradosGridItem>();
-        }
+        await Task.WhenAll(produtosTask, formasTask, resumoFpTask, pendentesTask, catalogTask).ConfigureAwait(false);
+
+        var produtos = await produtosTask.ConfigureAwait(false);
+        var formas = await formasTask.ConfigureAwait(false);
+        var resumoFp = await resumoFpTask.ConfigureAwait(false);
+        var pendentesEntrega = await pendentesTask.ConfigureAwait(false);
+        var catalog = await catalogTask.ConfigureAwait(false);
 
         var codigoMap = FaturamentoAgregacao.BuildCodigoParaCategoriaMap(catalog);
         var painel = FaturamentoAgregacao.Calcular(produtos, formas, codigoMap, resumoFp);
         painel.PendentesEntrega = pendentesEntrega;
         painel.CategoriasRefinamentoPendente = false;
         return painel;
+    }
+
+    private async Task<IReadOnlyList<ProdutosCadastradosGridItem>> FetchCatalogoProdutosParaPainelOuVazioAsync(
+        GestaoCliente entity,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _savwin
+                .FetchProdutosCadastradosGridAsync(entity, CatalogoProdutosCadastradosRequest, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ProdutosCadastradosGrid indisponível no painel; categorias em fallback.");
+            return Array.Empty<ProdutosCadastradosGridItem>();
+        }
     }
 
     private static string BuildSnapshotCacheKey(int gestaoClienteId, ProdutosPorOsClientRequest p) =>

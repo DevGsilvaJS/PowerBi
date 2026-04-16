@@ -78,7 +78,9 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
     {
         var dataInicial = SavwinRelatorioParametros.ToSavwinDate(request.DataInicial);
         var dataFinal = SavwinRelatorioParametros.ToSavwinDate(request.DataFinal);
-        var lojas = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+        // ProdutosPorOS (api.savwin): LOJAS = código de filial (FILSEQUENTIAL), como EntradasEstoque/CODIGOLOJA — não o FILID interno.
+        var lojas = await ObterCodigoDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug("Savwin ProdutosPorOS: LOJAS (código RetornaLista)={Lojas}", lojas);
 
         var payload = new Dictionary<string, string>
         {
@@ -201,7 +203,11 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
     {
         var dataPgtoIni = SavwinRelatorioParametros.ToSavwinDate(request.DataPgtoInicio);
         var dataPgtoFim = SavwinRelatorioParametros.ToSavwinDate(request.DataPgtoFim);
-        var loja = SavwinRelatorioParametros.LojaParametroUnico(cliente, request.LojaId);
+        // cliapi: LOJA = código de filial (FILSEQUENTIAL), não o FILID interno.
+        var lojasCodigo = await ObterCodigoDeRetornaListaAsync(cliente, request.LojaId, cancellationToken)
+            .ConfigureAwait(false);
+        var loja = PrimeiroTokenCsv(lojasCodigo);
+        _logger.LogDebug("Savwin APIVendaResumoTodasFormasPagamento: LOJA (código)={Loja}", loja);
         var agrupa = string.IsNullOrWhiteSpace(request.AgrupaFormaPagamento)
             ? "S"
             : request.AgrupaFormaPagamento.Trim();
@@ -285,9 +291,11 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         ProdutosPorOsClientRequest request,
         CancellationToken cancellationToken = default)
     {
-        var dataIni = (request.DataInicial ?? string.Empty).Trim();
-        var dataFim = (request.DataFinal ?? string.Empty).Trim();
-        var lojas = SavwinRelatorioParametros.BuildLojasParam(cliente, request.LojaId);
+        var dataIni = SavwinRelatorioParametros.ToSavwinDate(request.DataInicial ?? string.Empty);
+        var dataFim = SavwinRelatorioParametros.ToSavwinDate(request.DataFinal ?? string.Empty);
+        // cliapi: mesmo critério de LOJA singular — LOJAS com código (FILSEQUENTIAL), não FILID.
+        var lojas = await ObterCodigoDeRetornaListaAsync(cliente, request.LojaId, cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug("Savwin APIVendaFormaPagamentoResumo: LOJAS (código)={Lojas}", lojas);
 
         var payload = new Dictionary<string, string>
         {
@@ -410,6 +418,16 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         var inicioSeq = string.IsNullOrWhiteSpace(request.InicioSeq) ? "1" : request.InicioSeq.Trim();
         var finalSeq = string.IsNullOrWhiteSpace(request.FinalSeq) ? "99999999" : request.FinalSeq.Trim();
 
+        var cacheKey = $"savwin:ProdutosCadastradosGrid:{cliente.Id}:{codigoLoja}:{inicioSeq}:{finalSeq}";
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<ProdutosCadastradosGridItem>? cached) && cached is not null)
+        {
+            _logger.LogDebug(
+                "Savwin ProdutosCadastradosGrid cache hit (cliente {ClienteId}, {Count} itens)",
+                cliente.Id,
+                cached.Count);
+            return cached;
+        }
+
         var payload = new Dictionary<string, string>
         {
             ["CODIGOLOJA"] = codigoLoja,
@@ -451,11 +469,23 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
             try
             {
                 await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                return await DeserializeProdutosCadastradosGridFromStreamAsync(stream, cancellationToken);
+                var list = await DeserializeProdutosCadastradosGridFromStreamAsync(stream, cancellationToken);
+                _memoryCache.Set(
+                    cacheKey,
+                    list,
+                    new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30) });
+                _logger.LogInformation(
+                    "Savwin ProdutosCadastradosGrid: {Count} itens em cache 30 min (cliente {ClienteId}, LOJA={Loja}, SEQ {Ini}-{Fim})",
+                    list.Count,
+                    cliente.Id,
+                    codigoLoja,
+                    inicioSeq,
+                    finalSeq);
+                return list;
             }
             catch (JsonException ex)
             {
-                _logger.LogError(ex, "JSON inválido Savwin ProdutosCadastradosGrid (stream)");
+                _logger.LogError(ex, "JSON inválido SavWin ProdutosCadastradosGrid (stream)");
                 throw new InvalidOperationException("Resposta inválida da API externa.", ex);
             }
         }
@@ -1364,6 +1394,13 @@ public sealed class SavwinRelatoriosClient : ISavwinRelatoriosClient
         }
 
         return false;
+    }
+
+    /// <summary>Primeiro token de uma lista CSV (ex.: um código para o campo <c>LOJA</c> singular no <c>cliapi</c>).</summary>
+    private static string PrimeiroTokenCsv(string csv)
+    {
+        var p = (csv ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return p.Length > 0 ? p[0] : string.Empty;
     }
 
     /// <summary>

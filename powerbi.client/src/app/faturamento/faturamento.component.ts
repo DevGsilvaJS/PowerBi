@@ -255,8 +255,8 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
     this.dataFinal = this.toInputDate(hoje);
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
-      this.carregarDadosKpi();
+      this.lojaIdsSelecionadas = [];
+      this.produtosCarregando = false;
     });
   }
 
@@ -403,12 +403,22 @@ export class FaturamentoComponent implements OnInit, OnDestroy {
         exPercentual: 0
       }))
     }));
-    this.vendasPorProdutoLinhas = this.mapearVendasPorProdutoDoPainel(resp);
-    this.cardsFamiliaProduto = this.mapearCardsFamiliaProduto(resp);
+    /**
+     * 2ª fase (cadastro SavWin) recalcula categorias e cards de família. Se ainda vierá refinamento,
+     * não exibir valores provisórios da 1ª fase — evita 2–3 “saltos” de número e segunda animação redundante.
+     */
+    const aguardaRefinamentoCategorias = resp.categoriasRefinamentoPendente === true;
+    if (aguardaRefinamentoCategorias) {
+      this.categoriasPainelCarregando = true;
+      this.vendasPorProdutoLinhas = ordenarVendasPorProdutoPorValorDesc(linhasVendasPorProdutoZeradas());
+      this.cardsFamiliaProduto = cardsFamiliaProdutoZerados();
+    } else {
+      this.vendasPorProdutoLinhas = this.mapearVendasPorProdutoDoPainel(resp);
+      this.cardsFamiliaProduto = this.mapearCardsFamiliaProduto(resp);
+    }
   }
 
   private dispararRefinamentoCategorias(req: ProdutosPorOsRequest): void {
-    this.categoriasPainelCarregando = true;
     this.cdr.markForCheck();
     this.relatorios.faturamentoPainelCategorias(req).subscribe({
       next: (resp2: FaturamentoPainelResponse) => {

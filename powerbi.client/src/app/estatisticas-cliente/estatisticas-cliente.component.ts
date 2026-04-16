@@ -52,7 +52,7 @@ export class EstatisticasClienteComponent implements OnInit, OnDestroy {
     this.dataFinal = this.toInputDate(hoje);
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.lojaIdsSelecionadas = [];
       this.cdr.markForCheck();
     });
   }

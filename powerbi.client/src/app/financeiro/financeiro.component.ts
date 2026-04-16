@@ -60,7 +60,7 @@ export class FinanceiroComponent implements OnInit {
     this.duplicataEmissao2 = this.formatarDdMmYyyy(hoje);
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdSelecionada = this.lojas.length > 0 ? this.lojas[0].id : null;
+      this.lojaIdSelecionada = null;
     });
   }
 

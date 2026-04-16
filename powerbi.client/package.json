@@ -24,6 +24,7 @@
     "@types/leaflet": "^1.9.12",
     "jest-editor-support": "*",
     "leaflet": "^1.9.4",
+    "lottie-web": "^5.13.0",
     "run-script-os": "*",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

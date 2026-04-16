@@ -10,6 +10,7 @@
             class="filtro-input filtro-select"
             [class.filtro-input--erro]="!!periodoErro"
           >
+            <option [ngValue]="null">Selecione uma loja</option>
             <option *ngFor="let l of lojas" [ngValue]="l.id">{{ l.nome }}</option>
           </select>
         </label>

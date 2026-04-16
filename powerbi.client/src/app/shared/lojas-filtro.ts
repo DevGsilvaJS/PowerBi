@@ -2,6 +2,8 @@
 export interface LojaOption {
   id: string;
   nome: string;
+  /** Código de loja (FILSEQUENTIAL) para ordenar a lista (0001, 0002…), não o FILID. */
+  codigoOrdem?: string;
 }
 
 /** Item de <code>APILojas/RetornaLista</code> — <code>id</code> = FILID; <code>codigo</code> = FILSEQUENTIAL (código no cadastro). */
@@ -43,6 +45,16 @@ function rotuloLojaCodigoENome(codigo: string, nomeFantasia: string): string {
     return nome || 'Loja';
   }
   return nome.length > 0 ? `${codFmt} - ${nome}` : codFmt;
+}
+
+/** Ordenação por código de loja (numérico quando só dígitos; senão <code>localeCompare</code> com <code>numeric</code>). */
+export function compararCodigoLojaOrdem(a: string, b: string): number {
+  const ta = a.trim();
+  const tb = b.trim();
+  if (/^\d+$/.test(ta) && /^\d+$/.test(tb)) {
+    return parseInt(ta, 10) - parseInt(tb, 10);
+  }
+  return ta.localeCompare(tb, 'pt-BR', { numeric: true, sensitivity: 'base' });
 }
 
 /**
@@ -87,19 +99,14 @@ export function combinarLojasCadastroComSavwin(
     }
     visto.add(filialParaApi);
     const nome = rotuloLojaCodigoENome(cod, item.nome?.trim() || '');
-    out.push({ id: filialParaApi, nome });
+    out.push({ id: filialParaApi, nome, codigoOrdem: cod });
   }
   if (out.length === 0) {
     return fallback;
   }
-  out.sort((a, b) => {
-    const na = parseInt(a.id, 10);
-    const nb = parseInt(b.id, 10);
-    if (!Number.isNaN(na) && !Number.isNaN(nb)) {
-      return na - nb;
-    }
-    return a.id.localeCompare(b.id, 'pt-BR');
-  });
+  out.sort((a, b) =>
+    compararCodigoLojaOrdem(a.codigoOrdem ?? a.id, b.codigoOrdem ?? b.id)
+  );
   return out;
 }
 
@@ -109,15 +116,32 @@ export function opcoesLojasDoCadastro(cadastroCsv: string): LojaOption[] {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  ids.sort((x, y) => compararCodigoLojaOrdem(x, y));
   return ids.map((id) => ({
     id,
-    nome: rotuloLojaCodigoENome(id, 'Loja')
+    nome: rotuloLojaCodigoENome(id, 'Loja'),
+    codigoOrdem: id
   }));
 }
 
 /**
- * Parâmetro <code>lojaId</code> / FILID / LOJAS: <code>null</code> = todas as lojas do cliente na API;
- * string com IDs separados por vírgula = subconjunto.
+ * FILIDs separados por vírgula, ordenados pelo <strong>código</strong> da loja (não pela ordem do clique).
+ * <code>null</code> = nenhuma loja válida selecionada.
+ */
+function lojaIdsOrdenadosPorCodigo(lojas: LojaOption[], idsSelecionados: Set<string>): string | null {
+  const chosen = lojas.filter((l) => idsSelecionados.has(l.id));
+  if (chosen.length === 0) {
+    return null;
+  }
+  chosen.sort((a, b) =>
+    compararCodigoLojaOrdem(a.codigoOrdem ?? a.id, b.codigoOrdem ?? b.id)
+  );
+  return chosen.map((l) => l.id).join(',');
+}
+
+/**
+ * Parâmetro <code>lojaId</code> / LOJAS na API: string com FILIDs separados por vírgula (todas ou subconjunto),
+ * sempre na ordem do código de loja. <code>null</code> se não houver seleção válida.
  */
 export function lojaIdsParaParametroApi(lojas: LojaOption[], selecionadas: string[]): string | null {
   if (lojas.length === 0) {
@@ -128,10 +152,11 @@ export function lojaIdsParaParametroApi(lojas: LojaOption[], selecionadas: strin
   if (sel.length === 0) {
     return null;
   }
-  if (sel.length === setAll.size && sel.every((id) => setAll.has(id))) {
+  const setSel = new Set(sel.filter((id) => setAll.has(id)));
+  if (setSel.size === 0) {
     return null;
   }
-  return sel.sort().join(',');
+  return lojaIdsOrdenadosPorCodigo(lojas, setSel);
 }
 
 /**
@@ -157,12 +182,28 @@ export function mensagemSelecioneApenasUmaLojaSeTodasMarcadas(
   return 'Selecione apenas uma loja (não use a opção "Todas as lojas").';
 }
 
-/** Lista de IDs para chamadas que aceitam só uma loja por requisição (ex.: estoque). */
+/**
+ * Lista de IDs para chamadas que fazem uma requisição por loja (ex.: estoque).
+ * Quando <strong>todas</strong> as lojas estão marcadas, devolve <code>null</code> (uma chamada com <code>lojaId</code> vazio no servidor).
+ */
 export function lojaIdsParaListaChamadasIndividuais(
   lojas: LojaOption[],
   selecionadas: string[]
 ): string[] | null {
   if (lojas.length === 0) {
+    return null;
+  }
+  const setAll = new Set(lojas.map((l) => l.id));
+  const sel = [...new Set(selecionadas.map((s) => s.trim()).filter((s) => s.length > 0))];
+  if (sel.length === 0) {
+    return null;
+  }
+  const setSel = new Set(sel.filter((id) => setAll.has(id)));
+  if (setSel.size === 0) {
+    return null;
+  }
+  const todasMarcadas = setSel.size === setAll.size && [...setAll].every((id) => setSel.has(id));
+  if (todasMarcadas) {
     return null;
   }
   const param = lojaIdsParaParametroApi(lojas, selecionadas);

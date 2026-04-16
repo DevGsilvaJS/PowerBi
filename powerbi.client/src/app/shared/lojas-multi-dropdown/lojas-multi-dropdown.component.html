@@ -32,3 +32,27 @@
     </ul>
   </div>
 </div>
+
+<ng-container *ngIf="alertaUmaLojaAberto">
+  <div
+    class="lojas-dd-alert-backdrop"
+    (click)="fecharAlertaUmaLoja()"
+    role="presentation"
+    aria-hidden="true"
+  ></div>
+  <div class="lojas-dd-alert-wrap" role="dialog" aria-modal="true" aria-labelledby="lojas-dd-alert-heading">
+    <div class="lojas-dd-alert" (click)="$event.stopPropagation()">
+      <div class="lojas-dd-alert__accent" aria-hidden="true"></div>
+      <div class="lojas-dd-alert__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v5" />
+          <path d="M12 16.2h.01" />
+        </svg>
+      </div>
+      <h2 id="lojas-dd-alert-heading" class="lojas-dd-alert__title">Uma loja por consulta</h2>
+      <p class="lojas-dd-alert__text">Selecione apenas uma loja para continuar.</p>
+      <button type="button" class="lojas-dd-alert__btn" (click)="fecharAlertaUmaLoja()">Entendi</button>
+    </div>
+  </div>
+</ng-container>

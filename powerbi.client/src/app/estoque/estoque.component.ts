@@ -44,7 +44,7 @@ export class EstoqueComponent implements OnInit {
     this.dataFinal = s;
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.lojaIdsSelecionadas = [];
     });
   }
 

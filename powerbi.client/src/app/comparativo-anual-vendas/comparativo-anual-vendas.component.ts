@@ -59,7 +59,7 @@ export class ComparativoAnualVendasComponent implements OnInit {
     this.ano2 = ano;
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.lojaIdsSelecionadas = [];
     });
   }
 

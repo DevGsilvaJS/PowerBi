@@ -140,3 +140,135 @@
   cursor: pointer;
   flex-shrink: 0;
 }
+
+/* Alerta temático (slate + indigo, alinhado ao gatilho) */
+.lojas-dd-alert-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: lojas-dd-alert-fade 0.2s ease;
+}
+
+.lojas-dd-alert-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 1081;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  pointer-events: none;
+}
+
+.lojas-dd-alert {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.35rem 1.35rem 1.25rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.99) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.5),
+    0 24px 48px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(99, 102, 241, 0.08);
+  animation: lojas-dd-alert-pop 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+.lojas-dd-alert__accent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 0.75rem 0.75rem 0 0;
+  background: linear-gradient(90deg, #4f46e5, #6366f1, #818cf8);
+  opacity: 0.95;
+}
+
+.lojas-dd-alert__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.85rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+}
+
+.lojas-dd-alert__icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.lojas-dd-alert__title {
+  margin: 0 0 0.45rem;
+  font-size: var(--app-font-heading-sm);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: #f1f5f9;
+}
+
+.lojas-dd-alert__text {
+  margin: 0 0 1.15rem;
+  font-size: var(--app-font-muted);
+  line-height: 1.5;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.lojas-dd-alert__btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 1rem;
+  font-size: var(--app-font-subtitle);
+  font-weight: 600;
+  font-family: inherit;
+  color: #f8fafc;
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  outline: none;
+  transition:
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.lojas-dd-alert__btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.lojas-dd-alert__btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
+}
+
+@keyframes lojas-dd-alert-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lojas-dd-alert-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

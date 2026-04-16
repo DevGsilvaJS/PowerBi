@@ -438,7 +438,7 @@ export class EstatisticasVendedoresComponent implements OnInit, OnDestroy {
     this.dataFinal = this.toInputDate(fim);
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.map((l) => l.id);
+      this.lojaIdsSelecionadas = [];
       this.pesquisar();
     });
   }

@@ -82,8 +82,7 @@ export class ResumoGeralComponent implements OnInit, OnDestroy {
     this.dataFinal = this.toInputDate(hoje);
     this.relatorios.getLojasSavwin().subscribe((items) => {
       this.lojas = combinarLojasCadastroComSavwin(this.auth.getLojasCadastro(), items);
-      this.lojaIdsSelecionadas = this.lojas.length > 0 ? [this.lojas[0].id] : [];
-      this.pesquisar();
+      this.lojaIdsSelecionadas = [];
     });
   }
 
